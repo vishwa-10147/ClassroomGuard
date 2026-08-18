@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      sans-serif;
+    --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas,
+      monospace;
+
+    --sidebar-width: 240px;
+    --sidebar-collapsed-width: 64px;
+    --header-height: 56px;
+    --bottom-nav-height: 56px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2a3548 transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #2a3548;
+    border-radius: 3px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #3a4a60;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+
+  /* Focus visible ring for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  /* Remove focus ring for mouse/pointer interaction */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Skip to content link */
+  .skip-to-content {
+    position: absolute;
+    top: -100%;
+    left: 0;
+    z-index: 9999;
+    padding: 0.5rem 1rem;
+    background: #3b82f6;
+    color: #fff;
+    font-weight: 500;
+    transition: top 200ms ease;
+  }
+
+  .skip-to-content:focus {
+    top: 0;
+  }
+}
+
+@layer components {
+  /* Tabular numbers for timestamps, metrics, IDs */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Status dot with pulse animation */
+  .status-dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+
+  .status-dot-online {
+    @apply bg-cg-status-online;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+  }
+
+  .status-dot-offline {
+    @apply bg-cg-status-offline;
+  }
+
+  .status-dot-processing {
+    @apply bg-cg-status-processing animate-pulse-fast;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.5);
+  }
+
+  .status-dot-warning {
+    @apply bg-cg-status-warning;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+  }
+
+  .status-dot-error {
+    @apply bg-cg-status-error;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+  }
+
+  /* Card with standard elevation */
+  .card {
+    @apply rounded-lg border border-cg-border-default bg-cg-bg-secondary;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .card-elevated {
+    @apply rounded-lg border border-cg-border-strong bg-cg-bg-tertiary shadow-cg-md;
+  }
+
+  /* Severity left-border accents */
+  .severity-critical {
+    @apply border-l-2 border-l-cg-severity-critical;
+  }
+
+  .severity-high {
+    @apply border-l-2 border-l-cg-severity-high;
+  }
+
+  .severity-medium {
+    @apply border-l-2 border-l-cg-severity-medium;
+  }
+
+  .severity-low {
+    @apply border-l-2 border-l-cg-severity-low;
+  }
+
+  .severity-info {
+    @apply border-l-2 border-l-cg-severity-info;
+  }
+}
+
+@layer utilities {
+  /* Skeleton loading shimmer */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #1a2130 25%,
+      #212b3d 50%,
+      #1a2130 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pulse-slow,
+    .animate-pulse-fast,
+    .animate-slide-in-right,
+    .animate-slide-in-left,
+    .animate-slide-in-up,
+    .animate-slide-in-down,
+    .animate-fade-in {
+      animation: none !important;
+    }
+
+    .skeleton {
+      animation: none !important;
+    }
+
+    * {
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
