@@ -1,0 +1,26 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t classroomguard-backend:latest -f backend/Dockerfile .
+
+      - name: Build frontend image
+        run: docker build -t classroomguard-frontend:latest -f Dockerfile .
+
+      # TODO: Add deployment steps for your target environment
+      # Examples:
+      #   - docker compose up -d (self-hosted)
+      #   - Push to container registry
+      #   - Deploy to cloud provider
+      #   - kubectl apply
+      - name: Deploy (placeholder)
+        run: echo "Deployment steps go here"

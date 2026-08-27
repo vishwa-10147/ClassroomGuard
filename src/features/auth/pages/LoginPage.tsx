@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { cn } from '@/utils/cn';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Shield, Eye, EyeOff } from 'lucide-react';
 import { Button, Input, StatusIndicator } from '@/components/ui';
@@ -8,11 +8,11 @@ export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
 
   const login = useAuthStore((s) => s.login);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +25,7 @@ export function LoginForm() {
 
     try {
       await login(email, password);
+      navigate('/dashboard', { replace: true });
     } catch {
       setError('Invalid email or password. Please try again.');
     }
@@ -76,21 +77,6 @@ export function LoginForm() {
         }
       />
 
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-cg-border-default bg-cg-bg-surface text-cg-brand
-              focus:ring-cg-border-focus focus:ring-offset-0"
-          />
-          <span className="text-xs text-cg-text-secondary">
-            Remember this device
-          </span>
-        </label>
-      </div>
-
       <Button
         type="submit"
         loading={isLoading}
@@ -113,6 +99,12 @@ export function LoginForm() {
 }
 
 export function LoginPage() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-cg-bg-primary p-4">
       {/* Background pattern */}

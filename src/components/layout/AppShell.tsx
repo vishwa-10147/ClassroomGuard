@@ -5,12 +5,29 @@ import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import { MobileDrawer } from './MobileDrawer';
 import { useUiStore } from '@/stores/uiStore';
-
-// Mock ToastContainer if it doesn't exist, normally we'd import it from notificationStore/ui
-const ToastContainer = () => null;
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { ToastContainer } from '@/components/ui/Toast';
+import { ToastContainerGlobal } from '@/components/ui/ToastContainer';
+import { CommandPalette } from '@/components/ui/CommandPalette';
+import { ShortcutsHelp } from '@/components/ui/ShortcutsHelp';
 
 export function AppShell() {
   const { sidebarExpanded } = useUiStore();
+  const { notifications, removeNotification } = useNotificationStore();
+
+  useKeyboardShortcuts();
+
+  const toastItems = notifications
+    .filter((n) => !n.read && (Date.now() - n.createdAt) < 10000)
+    .slice(0, 3)
+    .map((n) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      duration: 6000,
+    }));
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-cg-bg-primary font-sans text-cg-text-primary">
@@ -50,7 +67,16 @@ export function AppShell() {
       <BottomNav />
       
       {/* Toast Notifications */}
-      <ToastContainer />
+      <ToastContainer toasts={toastItems} onDismiss={removeNotification} />
+
+      {/* Global Toast System */}
+      <ToastContainerGlobal />
+
+      {/* Command Palette */}
+      <CommandPalette />
+
+      {/* Keyboard Shortcuts Help */}
+      <ShortcutsHelp />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   TrendingUp,
   TrendingDown,
 } from 'lucide-react';
+import { useEffect } from 'react';
 import { cn } from '@/utils/cn';
 import { useSystemStore } from '@/stores/systemStore';
 
@@ -22,6 +23,10 @@ interface MetricItem {
 
 export function SystemOverview() {
   const systemStore = useSystemStore();
+
+  useEffect(() => {
+    systemStore.fetchRealData();
+  }, []);
 
   const metrics: MetricItem[] = [
     {
@@ -62,7 +67,7 @@ export function SystemOverview() {
     },
     {
       label: 'People Detected',
-      value: 156,
+      value: systemStore.uniquePeopleDetected,
       icon: <Users className="h-5 w-5" />,
       status: 'info',
     },

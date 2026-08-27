@@ -1,0 +1,155 @@
+# Classroom Guard - Cheating Detection Configuration
+# RTX 4070 8GB | 2 Cameras | YOLOv8m + Pose
+
+# === CAMERA SETTINGS ===
+cameras:
+  - id: 0
+    name: "Front Camera"
+    source: 0          # webcam index, or RTSP url like "rtsp://192.168.1.100:554/stream"
+    resolution: [1920, 1080]
+    fps: 30
+  - id: 1
+    name: "Back Camera"
+    source: 1
+    resolution: [1920, 1080]
+    fps: 30
+
+# === MODEL SETTINGS ===
+models:
+  detection:
+    weights: "models/yolov8m_custom.pt"   # custom trained model
+    fallback_weights: "yolov8m.pt"         # pretrained if custom not available
+    confidence: 0.5
+    iou_threshold: 0.45
+    input_size: 640
+    device: 0                              # GPU index
+    half: true                             # FP16 for TensorRT speed
+
+  pose:
+    weights: "models/yolov8m-pose.pt"     # pose estimation model
+    confidence: 0.5
+    input_size: 640
+    device: 0
+    half: true
+
+# === TENSORRT EXPORT ===
+tensorrt:
+  enabled: true
+  fp16: true
+  workspace: 4                             # GB
+  export_dir: "models/"
+
+# === DETECTION CLASSES ===
+classes:
+  # COCO classes (pretrained)
+  person: 0
+  cell_phone: 67
+
+  # Custom classes (after fine-tuning)
+  custom:
+    - "person"
+    - "cell_phone"
+    - "calculator"
+    - "cheat_sheet"
+    - "earbuds"
+
+# === BYTE TRACKER ===
+tracker:
+  type: bytetrack
+  track_thresh: 0.5                        # min confidence to enter tracker
+  high_thresh: 0.6                         # high-confidence tier for stage-1 matching
+  match_thresh: 0.8                        # IoU threshold for association
+  max_time_lost: 30                        # frames to keep lost tracks before removal
+  min_hits: 3                              # min detections before track is confirmed
+
+# Legacy tracking config (kept for backward compat)
+tracking:
+  tracker_type: "bytetrack"
+  track_thresh: 0.5
+  match_thresh: 0.8
+  track_buffer: 30
+  min_hits: 3
+  frame_rate: 30
+
+# === GAZE / HEAD POSE ESTIMATION ===
+gaze:
+  enabled: true
+  looking_down_threshold: -30              # degrees — nose below horizontal = looking down
+  head_turn_threshold: 25                  # degrees — yaw exceeds this = turning head
+
+# === FALSE POSITIVE REDUCTION ===
+false_positive_filter:
+  min_consecutive_frames: 3                # object must appear in N consecutive frames before alert
+  min_detection_size: 30                   # pixels — detections smaller than this are penalised
+  confidence_calibration: true             # enable geometric confidence adjustment
+
+# === CHEATING DETECTION RULES ===
+cheating_rules:
+  # Phone detection
+  phone_usage:
+    enabled: true
+    alert_after_frames: 5                  # flag after 5 consecutive frames
+    confidence_threshold: 0.5
+    proximity_to_person: 150               # pixels - phone near a person = suspicious
+
+  # Calculator detection (if not allowed)
+  calculator_usage:
+    enabled: true
+    alert_after_frames: 3
+    confidence_threshold: 0.5
+    allowed_sections: []                   # seat numbers where calculator is allowed
+
+  # Posture analysis
+  posture:
+    enabled: true
+    head_turn_threshold: 25                # degrees - head turned this much = suspicious
+    head_turn_duration: 3.0                # seconds - sustained head turn
+    looking_down_threshold: 30             # degrees - looking down (hidden materials?)
+    looking_down_duration: 2.0
+    excessive_movement_threshold: 50       # pixels - large body movement
+
+  # Document passing
+  document_passing:
+    enabled: true
+    hand_proximity_threshold: 100          # pixels - hands too close between students
+    min_duration: 1.0                      # seconds
+
+  # Seat violations
+  seat_violations:
+    enabled: true
+    max_stand_duration: 5.0               # seconds - standing too long
+    max_absence_duration: 30.0            # seconds - left seat
+
+# === ALERT SETTINGS ===
+alerts:
+  enabled: true
+  log_to_file: true
+  log_dir: "logs/"
+  save_snapshots: true
+  snapshot_dir: "logs/snapshots/"
+  cooldown: 10.0                          # seconds between same alert type per student
+
+# === TRAINING ===
+training:
+  detector_model: yolov8m.pt              # base model for detector fine-tuning
+  pose_model: yolov8m-pose.pt             # base model for pose fine-tuning
+  epochs: 100
+  batch_size: 16
+  image_size: 640
+  project: runs/
+
+# === DASHBOARD ===
+dashboard:
+  enabled: true
+  port: 8080
+  host: "0.0.0.0"
+  stream_quality: 80                      # JPEG quality 1-100
+  max_fps_display: 15                     # reduce for web display
+
+# === PERFORMANCE ===
+performance:
+  max_batch_size: 1                       # per camera
+  num_workers: 2
+  buffer_size: 128                        # frame buffer per camera
+  use_cuda_graphs: true                   # faster inference
+  warmup_frames: 30                       # warm up GPU before detection

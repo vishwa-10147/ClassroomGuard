@@ -11,6 +11,7 @@ interface EventCardProps {
 }
 
 const severityColors = {
+  info: 'text-blue-500',
   critical: 'border-l-red-600 bg-red-50 text-red-900 dark:border-l-red-500 dark:bg-red-950/50 dark:text-red-200',
   high: 'border-l-orange-500 bg-orange-50 text-orange-900 dark:border-l-orange-500 dark:bg-orange-950/50 dark:text-orange-200',
   medium: 'border-l-amber-400 bg-amber-50 text-amber-900 dark:border-l-amber-400 dark:bg-amber-950/50 dark:text-amber-200',
@@ -18,7 +19,8 @@ const severityColors = {
 };
 
 const badgeColors = {
-  critical: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  info: 'bg-blue-50 text-blue-700',
+      critical: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   high: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
   medium: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
   low: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400',

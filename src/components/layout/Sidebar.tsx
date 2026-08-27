@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   MonitorPlay,
@@ -13,8 +13,10 @@ import {
   Lock,
   ScrollText,
   Settings,
+  Image,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useUiStore } from '@/stores/uiStore';
@@ -37,6 +39,7 @@ const navigation = [
       { name: 'Detection Events', href: '/events', icon: Zap },
       { name: 'Alerts', href: '/alerts', icon: Bell },
       { name: 'Incidents', href: '/incidents', icon: Shield },
+      { name: 'Evidence', href: '/evidence', icon: Image },
       { name: 'Reports', href: '/reports', icon: FileText },
     ],
   },
@@ -54,13 +57,16 @@ const navigation = [
 
 export function Sidebar() {
   const { sidebarExpanded, toggleSidebar } = useUiStore();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   return (
     <aside
+      role="navigation"
+      aria-label="Main navigation"
       className={cn(
         'fixed left-0 top-0 z-40 h-screen transition-all duration-300 ease-in-out',
         'border-r border-cg-border-default bg-cg-bg-secondary hidden lg:flex lg:flex-col',
@@ -96,6 +102,7 @@ export function Sidebar() {
                       <li key={item.name} className="relative group">
                         <Link
                           to={item.href}
+                          aria-current={isActive ? 'page' : undefined}
                           className={cn(
                             'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
                             isActive
@@ -144,7 +151,13 @@ export function Sidebar() {
         </button>
         
         {/* User Profile */}
-        <div className={cn('flex items-center rounded-md p-2', sidebarExpanded ? 'space-x-3' : 'justify-center')}>
+        <button
+          onClick={() => navigate('/settings')}
+          className={cn(
+            'flex w-full items-center rounded-md p-2 transition-colors hover:bg-cg-bg-tertiary',
+            sidebarExpanded ? 'space-x-3' : 'justify-center'
+          )}
+        >
           <div className="relative">
             <div className="h-8 w-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-medium flex-shrink-0">
               {user?.name?.charAt(0) || 'U'}
@@ -152,12 +165,26 @@ export function Sidebar() {
             <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-cg-bg-secondary bg-green-500"></span>
           </div>
           {sidebarExpanded && (
-            <div className="flex flex-col truncate">
+            <div className="flex flex-col truncate text-left">
               <span className="text-sm font-medium text-cg-text-primary truncate">{user?.name || 'User'}</span>
               <span className="text-xs text-cg-text-muted truncate capitalize">{user?.role?.replace('_', ' ') || 'User'}</span>
             </div>
           )}
-        </div>
+        </button>
+
+        {/* Logout */}
+        <button
+          onClick={() => { logout(); navigate('/login'); }}
+          className={cn(
+            'flex w-full items-center rounded-md p-2 text-cg-status-error transition-colors hover:bg-cg-status-error/10',
+            sidebarExpanded ? 'space-x-3' : 'justify-center'
+          )}
+          title="Sign out"
+          aria-label="Sign out"
+        >
+          <LogOut className="h-4 w-4 flex-shrink-0" />
+          {sidebarExpanded && <span className="text-sm font-medium">Sign out</span>}
+        </button>
       </div>
     </aside>
   );

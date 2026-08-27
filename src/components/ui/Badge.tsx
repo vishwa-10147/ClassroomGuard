@@ -10,7 +10,7 @@ interface BadgeProps {
   children: React.ReactNode;
   variant?: BadgeVariant;
   severity?: Severity;
-  status?: CameraStatus | AlertStatus;
+  status?: CameraStatus | AlertStatus | 'warning';
   processingState?: ProcessingState;
   className?: string;
   dot?: boolean;
@@ -31,6 +31,7 @@ const statusColors: Record<string, string> = {
   error: 'bg-red-500/10 text-red-400 border-red-500/20',
   active: 'bg-red-500/10 text-red-400 border-red-500/20',
   acknowledged: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  warning: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   resolved: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
 };
 
@@ -61,6 +62,8 @@ export function Badge({
 
   return (
     <span
+      role={variant === 'status' || variant === 'processing' ? 'status' : undefined}
+      aria-label={variant === 'status' && status ? `${status} status` : variant === 'processing' && processingState ? `${processingState} state` : undefined}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-xs font-medium',
         getVariantStyles(),

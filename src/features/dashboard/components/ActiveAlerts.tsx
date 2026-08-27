@@ -1,23 +1,32 @@
+import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/utils/cn';
 import { Badge, Button } from '@/components/ui';
-import { mockAlerts } from '@/mocks/alerts';
+import { alertService } from '@/services/api/alertService';
+import type { Alert } from '@/types/alert.types';
 import { formatRelativeTime } from '@/utils/formatters';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { Severity } from '@/types/common.types';
-
-const severityIcons: Record<Severity, string> = {
-  critical: '▮',
-  high: '▮',
-  medium: '△',
-  low: '▵',
-  info: '○',
-};
 
 export function ActiveAlerts() {
-  const activeAlerts = mockAlerts
-    .filter((a) => a.status === 'active')
-    .slice(0, 4);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAlerts = useCallback(() => {
+    alertService.getAll('active')
+      .then(setAlerts)
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  const handleAcknowledge = async (id: string) => {
+    await alertService.acknowledge(id);
+    fetchAlerts();
+  };
+
+  const displayAlerts = alerts.slice(0, 4);
 
   return (
     <div>
@@ -26,9 +35,9 @@ export function ActiveAlerts() {
           <h3 className="text-base font-semibold text-cg-text-primary">
             Active Alerts
           </h3>
-          {activeAlerts.length > 0 && (
+          {displayAlerts.length > 0 && (
             <span className="inline-flex items-center justify-center rounded-full bg-cg-severity-critical-bg px-2 py-0.5 text-2xs font-medium text-cg-severity-critical">
-              {activeAlerts.length}
+              {displayAlerts.length}
             </span>
           )}
         </div>
@@ -41,7 +50,11 @@ export function ActiveAlerts() {
       </div>
 
       <div className="card divide-y divide-cg-border-subtle">
-        {activeAlerts.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 text-cg-text-tertiary animate-spin" />
+          </div>
+        ) : displayAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <CheckCircle className="h-8 w-8 text-cg-status-online/30 mb-2" />
             <p className="text-sm text-cg-text-secondary">
@@ -52,7 +65,7 @@ export function ActiveAlerts() {
             </p>
           </div>
         ) : (
-          activeAlerts.map((alert) => (
+          displayAlerts.map((alert) => (
             <div
               key={alert.id}
               className={cn(
@@ -79,7 +92,7 @@ export function ActiveAlerts() {
                   <div className="mt-1 flex items-center gap-1.5 text-2xs text-cg-text-tertiary">
                     {alert.classroomName && <span>{alert.classroomName}</span>}
                     {alert.classroomName && <span>·</span>}
-                    <span>{formatRelativeTime(alert.createdAt)}</span>
+                    <span>{formatRelativeTime(alert.timestamp)}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -87,6 +100,7 @@ export function ActiveAlerts() {
                     variant="ghost"
                     size="sm"
                     className="text-2xs h-7 px-2"
+                    onClick={() => handleAcknowledge(alert.id)}
                   >
                     Acknowledge
                   </Button>

@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { cn } from '@/utils/cn';
 import { Badge } from '@/components/ui';
-import { mockEvents } from '@/mocks/events';
+import { eventService } from '@/services/api/eventService';
+import type { DetectionEvent } from '@/types/event.types';
 import { formatRelativeTime, formatTimestamp } from '@/utils/formatters';
-import { Zap, ArrowRight } from 'lucide-react';
+import { Zap, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const eventTypeLabels: Record<string, string> = {
@@ -15,7 +17,14 @@ const eventTypeLabels: Record<string, string> = {
 };
 
 export function RecentEvents() {
-  const recentEvents = mockEvents.slice(0, 6);
+  const [events, setEvents] = useState<DetectionEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    eventService.getRecent(6)
+      .then(setEvents)
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div>
@@ -32,13 +41,17 @@ export function RecentEvents() {
       </div>
 
       <div className="card divide-y divide-cg-border-subtle">
-        {recentEvents.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 text-cg-text-tertiary animate-spin" />
+          </div>
+        ) : events.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Zap className="h-8 w-8 text-cg-text-tertiary/30 mb-2" />
             <p className="text-sm text-cg-text-secondary">No recent events</p>
           </div>
         ) : (
-          recentEvents.map((event) => (
+          events.map((event) => (
             <Link
               to={`/events/${event.id}`}
               key={event.id}

@@ -24,9 +24,14 @@ export const PERMISSIONS = {
   VIEW_DASHBOARD: 'view_dashboard',
   VIEW_CAMERAS: 'view_cameras',
   MANAGE_CAMERAS: 'manage_cameras',
+  VIEW_CLASSROOMS: 'view_classrooms',
+  MANAGE_CLASSROOMS: 'manage_classrooms',
   VIEW_INCIDENTS: 'view_incidents',
   MANAGE_INCIDENTS: 'manage_incidents',
+  VIEW_ALERTS: 'view_alerts',
+  MANAGE_ALERTS: 'manage_alerts',
   VIEW_REPORTS: 'view_reports',
   MANAGE_USERS: 'manage_users',
-  MANAGE_SETTINGS: 'manage_settings'
+  MANAGE_RECORDINGS: 'manage_recordings',
+  MANAGE_SETTINGS: 'manage_settings',
 } as const;

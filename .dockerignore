@@ -1,0 +1,17 @@
+node_modules
+.venv
+ai/.venv
+dist
+.git
+.github
+__pycache__
+**/__pycache__
+*.pyc
+.env
+*.log
+ai/logs
+ai/analysis_results.json
+storage/uploads
+test_data
+basepaper.pdf
+backups

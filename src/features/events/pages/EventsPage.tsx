@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { mockEvents } from '@/mocks/events';
-import { Filter, Search, ShieldAlert, Smartphone, Clock, MapPin, Video, AlertTriangle, Maximize2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { eventService } from '@/services/api/eventService';
+import type { DetectionEvent } from '@/types/event.types';
+import { Filter, Search, Smartphone, Clock, MapPin, Video, AlertTriangle, Maximize2, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 const Badge = ({ children, variant = 'default', className }: any) => {
@@ -9,14 +10,37 @@ const Badge = ({ children, variant = 'default', className }: any) => {
     high: 'bg-red-100 text-red-800',
     medium: 'bg-amber-100 text-amber-800',
     low: 'bg-blue-100 text-blue-800',
+    critical: 'bg-red-100 text-red-800',
+    info: 'bg-blue-100 text-blue-800',
   };
   return <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium uppercase", variants[variant], className)}>{children}</span>;
 };
 
+const displayConf = (c: number) => c > 1 ? c.toFixed(0) : (c * 100).toFixed(0);
+
 export default function EventsPage() {
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(mockEvents[0]?.id || null);
-  
-  const selectedEvent = mockEvents.find(e => e.id === selectedEventId);
+  const [events, setEvents] = useState<DetectionEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  useEffect(() => {
+    eventService.getRecent(50)
+      .then((data) => {
+        setEvents(data);
+        if (data.length > 0) setSelectedEventId(data[0].id);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const selectedEvent = events.find(e => e.id === selectedEventId);
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -39,7 +63,7 @@ export default function EventsPage() {
           </div>
           
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {mockEvents.map(event => (
+            {events.map(event => (
               <div 
                 key={event.id}
                 onClick={() => setSelectedEventId(event.id)}
@@ -58,7 +82,7 @@ export default function EventsPage() {
                   <Badge variant={event.severity}>{event.severity}</Badge>
                 </div>
                 <div className="text-xs text-gray-500 flex items-center justify-between">
-                  <span className="flex items-center"><MapPin className="w-3 h-3 mr-1" /> {event.classroomId}</span>
+                  <span className="flex items-center"><MapPin className="w-3 h-3 mr-1" /> {event.classroomName || event.classroomId}</span>
                   <span className="flex items-center font-mono"><Clock className="w-3 h-3 mr-1" /> {new Date(event.timestamp).toLocaleTimeString()}</span>
                 </div>
               </div>
@@ -105,7 +129,7 @@ export default function EventsPage() {
                     <dl className="space-y-3 text-sm">
                       <div className="flex justify-between"><dt className="text-gray-500">Type</dt><dd className="font-medium text-gray-900">{selectedEvent.type}</dd></div>
                       {selectedEvent.confidence !== undefined && (
-                        <div className="flex justify-between"><dt className="text-gray-500">Confidence</dt><dd className="font-medium text-gray-900">{(selectedEvent.confidence * 100).toFixed(1)}%</dd></div>
+                        <div className="flex justify-between"><dt className="text-gray-500">Confidence</dt><dd className="font-medium text-gray-900">{displayConf(selectedEvent.confidence)}%</dd></div>
                       )}
                       <div className="flex justify-between"><dt className="text-gray-500">Timestamp</dt><dd className="font-medium text-gray-900">{new Date(selectedEvent.timestamp).toLocaleString()}</dd></div>
                       <div className="flex justify-between"><dt className="text-gray-500">Tracker ID</dt><dd className="font-mono text-gray-900">{selectedEvent.trackerId || 'N/A'}</dd></div>
@@ -114,8 +138,8 @@ export default function EventsPage() {
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 border-b pb-2 mb-3">Location</h3>
                     <dl className="space-y-3 text-sm">
-                      <div className="flex justify-between"><dt className="text-gray-500">Classroom</dt><dd className="font-medium text-primary-600 cursor-pointer hover:underline">{selectedEvent.classroomId}</dd></div>
-                      <div className="flex justify-between"><dt className="text-gray-500">Camera</dt><dd className="font-medium text-gray-900">{selectedEvent.cameraId}</dd></div>
+                      <div className="flex justify-between"><dt className="text-gray-500">Classroom</dt><dd className="font-medium text-primary-600 cursor-pointer hover:underline">{selectedEvent.classroomName || selectedEvent.classroomId}</dd></div>
+                      <div className="flex justify-between"><dt className="text-gray-500">Camera</dt><dd className="font-medium text-gray-900">{selectedEvent.cameraName || selectedEvent.cameraId}</dd></div>
                       {selectedEvent.seatId && (
                         <div className="flex justify-between"><dt className="text-gray-500">Seat Grid</dt><dd className="font-medium text-gray-900">{selectedEvent.seatId}</dd></div>
                       )}

@@ -20,5 +20,8 @@ export const userService = {
   },
   disable: async (id: string): Promise<void> => {
     await apiClient.post(`/users/${id}/disable`);
-  }
+  },
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/users/${id}`);
+  },
 };

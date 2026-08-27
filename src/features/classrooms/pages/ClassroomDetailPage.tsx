@@ -1,21 +1,50 @@
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Users, Building, Video, AlertCircle, Smartphone } from 'lucide-react';
-import { mockClassrooms } from '@/mocks/classrooms';
-import { mockCameras } from '@/mocks/cameras';
+import { ArrowLeft, Users, Building, Video, AlertCircle, Smartphone, Loader2 } from 'lucide-react';
+import { classroomService } from '@/services/api/classroomService';
+import { cameraService } from '@/services/api/cameraService';
+import type { Classroom } from '@/types/classroom.types';
+import type { Camera } from '@/types/camera.types';
 import { cn } from '@/utils/cn';
 
 const Card = ({ children, className }: any) => <div className={cn("bg-white border border-gray-200 rounded-lg shadow-sm p-4", className)}>{children}</div>;
 
 export default function ClassroomDetailPage() {
   const { id } = useParams();
-  
-  // Use mock data for demonstration
-  const classroom = mockClassrooms.find(c => c.id === id) || mockClassrooms[0];
-  const cameras = mockCameras.filter(c => classroom.cameraId === c.id);
+  const [classroom, setClassroom] = useState<Classroom | null>(null);
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Generate a mock seat map 5 rows, 8 cols
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([
+      classroomService.getById(id),
+      cameraService.getAll(),
+    ]).then(([classroomData, allCameras]) => {
+      setClassroom(classroomData);
+      setCameras(allCameras.filter(c => c.classroomId === id));
+    }).finally(() => setLoading(false));
+  }, [id]);
+
+  // Generate a static seat map 5 rows, 8 cols
   const rows = ['A', 'B', 'C', 'D', 'E'];
   const cols = [1, 2, 3, 4, 5, 6, 7, 8];
+
+  if (loading) {
+    return (
+      <div className="space-y-6 flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!classroom) {
+    return (
+      <div className="space-y-6 text-center py-24">
+        <p className="text-gray-500">Classroom not found.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -56,7 +85,7 @@ export default function ClassroomDetailPage() {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Active Phones</p>
-            <p className="text-2xl font-bold text-gray-900">{Math.floor(Math.random() * 5)}</p>
+            <p className="text-2xl font-bold text-gray-900">{0}</p>
           </div>
         </Card>
         <Card className="flex items-center p-4">
@@ -65,7 +94,7 @@ export default function ClassroomDetailPage() {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Alerts (Today)</p>
-            <p className="text-2xl font-bold text-gray-900">{Math.floor(Math.random() * 10)}</p>
+            <p className="text-2xl font-bold text-gray-900">{0}</p>
           </div>
         </Card>
       </div>
@@ -84,15 +113,7 @@ export default function ClassroomDetailPage() {
           <Card>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Event Timeline</h3>
             <div className="space-y-4">
-              {[1,2,3].map(i => (
-                <div key={i} className="flex border-l-2 border-indigo-200 pl-4 py-1">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">Suspicious Activity Detected</p>
-                    <p className="text-xs text-gray-500">Multiple phones detected in row C</p>
-                  </div>
-                  <div className="text-xs text-gray-400 font-mono">10:{15 + i} AM</div>
-                </div>
-              ))}
+              <p className="text-sm text-gray-500 italic">No recent events for this classroom.</p>
             </div>
           </Card>
         </div>
@@ -111,16 +132,17 @@ export default function ClassroomDetailPage() {
                   <div key={row} className="flex gap-2">
                     <div className="w-6 flex items-center justify-center text-xs font-bold text-gray-400">{row}</div>
                     {cols.map(col => {
-                      const isOccupied = Math.random() > 0.4;
-                      const hasPhone = isOccupied && Math.random() > 0.8;
+                      const seatKey = `${row}${col}`;
+                      const isOccupied = (row.charCodeAt(0) + col) % 3 !== 0;
+                      const hasPhone = isOccupied && (row.charCodeAt(0) + col) % 7 === 0;
                       return (
                         <div 
-                          key={`${row}${col}`}
+                          key={seatKey}
                           className={cn(
                             "w-8 h-8 rounded border flex items-center justify-center relative cursor-help transition-colors",
                             isOccupied ? "bg-indigo-100 border-indigo-300" : "bg-white border-gray-200 hover:border-gray-300"
                           )}
-                          title={`Seat ${row}${col}${hasPhone ? ' - Phone Detected' : ''}`}
+                          title={`Seat ${seatKey}${hasPhone ? ' - Phone Detected' : ''}`}
                         >
                           {hasPhone && <div className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full animate-pulse" />}
                         </div>

@@ -1,96 +1,74 @@
+import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+
 import { AppShell } from '@/components/layout/AppShell';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
-import { lazy, Suspense } from 'react';
 import { LoadingState } from '@/components/shared/LoadingState';
+import { RealTimeProvider } from '@/components/providers/RealTimeProvider';
 
-// Lazy-load feature pages to reduce initial bundle size
-const LiveMonitoringPage = lazy(() =>
-  import('@/features/live-monitoring/pages/LiveMonitoringPage').then((m) => ({
-    default: m.LiveMonitoringPage,
-  }))
+const LiveMonitoringPage = lazy(
+  () => import('@/features/live-monitoring/pages/LiveMonitoringPage')
 );
 
-const CamerasPage = lazy(() =>
-  import('@/features/cameras/pages/CamerasPage').then((m) => ({
-    default: m.CamerasPage,
-  }))
+const CamerasPage = lazy(
+  () => import('@/features/cameras/pages/CamerasPage')
 );
 
-const ClassroomsPage = lazy(() =>
-  import('@/features/classrooms/pages/ClassroomsPage').then((m) => ({
-    default: m.ClassroomsPage,
-  }))
+const ClassroomsPage = lazy(
+  () => import('@/features/classrooms/pages/ClassroomsPage')
 );
 
-const ClassroomDetailPage = lazy(() =>
-  import('@/features/classrooms/pages/ClassroomDetailPage').then((m) => ({
-    default: m.ClassroomDetailPage,
-  }))
+const ClassroomDetailPage = lazy(
+  () => import('@/features/classrooms/pages/ClassroomDetailPage')
 );
 
-const EventsPage = lazy(() =>
-  import('@/features/events/pages/EventsPage').then((m) => ({
-    default: m.EventsPage,
-  }))
+const EventsPage = lazy(
+  () => import('@/features/events/pages/EventsPage')
 );
 
-const AlertsPage = lazy(() =>
-  import('@/features/alerts/pages/AlertsPage').then((m) => ({
-    default: m.AlertsPage,
-  }))
+const AlertsPage = lazy(
+  () => import('@/features/alerts/pages/AlertsPage')
 );
 
-const IncidentsPage = lazy(() =>
-  import('@/features/incidents/pages/IncidentsPage').then((m) => ({
-    default: m.IncidentsPage,
-  }))
+const IncidentsPage = lazy(
+  () => import('@/features/incidents/pages/IncidentsPage')
 );
 
-const IncidentDetailPage = lazy(() =>
-  import('@/features/incidents/pages/IncidentDetailPage').then((m) => ({
-    default: m.IncidentDetailPage,
-  }))
+const IncidentDetailPage = lazy(
+  () => import('@/features/incidents/pages/IncidentDetailPage')
 );
 
-const RecordingsPage = lazy(() =>
-  import('@/features/recordings/pages/RecordingsPage').then((m) => ({
-    default: m.RecordingsPage,
-  }))
+const RecordingsPage = lazy(
+  () => import('@/features/recordings/pages/RecordingsPage')
 );
 
-const ReportsPage = lazy(() =>
-  import('@/features/reports/pages/ReportsPage').then((m) => ({
-    default: m.ReportsPage,
-  }))
+const ReportsPage = lazy(
+  () => import('@/features/reports/pages/ReportsPage')
 );
 
-const UsersPage = lazy(() =>
-  import('@/features/users/pages/UsersPage').then((m) => ({
-    default: m.UsersPage,
-  }))
+const UsersPage = lazy(
+  () => import('@/features/users/pages/UsersPage')
 );
 
-const RolesPage = lazy(() =>
-  import('@/features/roles/pages/RolesPage').then((m) => ({
-    default: m.RolesPage,
-  }))
+const RolesPage = lazy(
+  () => import('@/features/roles/pages/RolesPage')
 );
 
-const AuditLogsPage = lazy(() =>
-  import('@/features/audit-logs/pages/AuditLogsPage').then((m) => ({
-    default: m.AuditLogsPage,
-  }))
+const AuditLogsPage = lazy(
+  () => import('@/features/audit-logs/pages/AuditLogsPage')
 );
 
-const SettingsPage = lazy(() =>
-  import('@/features/settings/pages/SettingsPage').then((m) => ({
-    default: m.SettingsPage,
-  }))
+const SettingsPage = lazy(
+  () => import('@/features/settings/pages/SettingsPage')
 );
 
-function SuspenseWrapper({ children }: { children: React.ReactNode }) {
+const EvidencePage = lazy(
+  () => import('@/features/evidence/pages/EvidencePage')
+);
+
+function SuspenseWrapper({ children }: { children: ReactNode }) {
   return (
     <Suspense fallback={<LoadingState message="Loading page..." />}>
       {children}
@@ -103,18 +81,28 @@ export const router = createBrowserRouter([
     path: '/login',
     element: <LoginPage />,
   },
+
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <ProtectedRoute>
+        <RealTimeProvider>
+          <AppShell />
+        </RealTimeProvider>
+      </ProtectedRoute>
+    ),
+
     children: [
       {
         index: true,
         element: <Navigate to="/dashboard" replace />,
       },
+
       {
         path: 'dashboard',
         element: <DashboardPage />,
       },
+
       {
         path: 'live',
         element: (
@@ -123,6 +111,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'cameras',
         element: (
@@ -131,6 +120,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'classrooms',
         element: (
@@ -139,6 +129,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'classrooms/:id',
         element: (
@@ -147,6 +138,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'recordings',
         element: (
@@ -155,6 +147,16 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
+      {
+        path: 'evidence',
+        element: (
+          <SuspenseWrapper>
+            <EvidencePage />
+          </SuspenseWrapper>
+        ),
+      },
+
       {
         path: 'events',
         element: (
@@ -163,6 +165,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'events/:id',
         element: (
@@ -171,6 +174,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'alerts',
         element: (
@@ -179,6 +183,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'incidents',
         element: (
@@ -187,6 +192,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'incidents/:id',
         element: (
@@ -195,6 +201,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'reports',
         element: (
@@ -203,6 +210,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'users',
         element: (
@@ -211,6 +219,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'roles',
         element: (
@@ -219,6 +228,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'audit-logs',
         element: (
@@ -227,6 +237,7 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
       {
         path: 'settings',
         element: (
@@ -235,10 +246,11 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
+      {
+        path: '*',
+        element: <Navigate to="/dashboard" replace />,
+      },
     ],
-  },
-  {
-    path: '*',
-    element: <Navigate to="/dashboard" replace />,
   },
 ]);

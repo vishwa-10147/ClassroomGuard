@@ -1,0 +1,16 @@
+ultralytics>=8.3.0
+opencv-python>=4.10.0
+numpy>=1.26.0
+torch>=2.4.0
+torchvision>=0.19.0
+# TensorRT (install separately from NVIDIA)
+# pip install tensorrt or use nvidia-pyindex
+filterpy>=1.4.5
+scipy>=1.13.0
+lap>=0.5.12
+pyyaml>=6.0.2
+flask>=3.0.0
+flask-socketio>=5.3.0
+eventlet>=0.37.0
+Pillow>=10.4.0
+pandas>=2.2.0

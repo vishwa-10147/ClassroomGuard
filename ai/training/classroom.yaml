@@ -1,0 +1,18 @@
+# ClassroomGuard Dataset Configuration
+# Fine-tune YOLOv8 on custom classroom data
+
+path: dataset_structure   # root relative to this file
+train: images/train
+val: images/val
+test: images/test
+
+# Number of classes
+nc: 5
+
+# Class names
+names:
+  0: person
+  1: cell_phone
+  2: calculator
+  3: cheat_sheet
+  4: earbuds

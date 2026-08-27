@@ -1,89 +1,153 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, Plus, Search, Filter } from 'lucide-react';
+import { FileText, Plus, Filter, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
-
-const mockIncidents = [
-  { id: 'INC-2023-001', title: 'Cheating suspected during Final Math Exam', severity: 'high', status: 'investigating', classroom: 'Room 302', assignee: 'Admin User', created: '2023-10-25T10:30:00Z' },
-  { id: 'INC-2023-002', title: 'Unauthorized person in testing area', severity: 'critical', status: 'open', classroom: 'Lab A', assignee: 'Unassigned', created: '2023-10-26T14:15:00Z' },
-  { id: 'INC-2023-003', title: 'Multiple phone detections', severity: 'medium', status: 'resolved', classroom: 'Room 101', assignee: 'John Doe', created: '2023-10-20T09:00:00Z' },
-];
+import { incidentService } from '@/services/api/incidentService';
+import type { Incident } from '@/types/incident.types';
+import { useAuthStore } from '@/stores/authStore';
+import { hasPermission } from '@/utils/permissions';
+import { PERMISSIONS } from '@/utils/constants';
+import { Button } from '@/components/ui/Button';
+import { SearchInput } from '@/components/ui/Input';
 
 const Badge = ({ children, variant, className }: any) => {
-  const v: any = {
-    critical: 'bg-red-100 text-red-800 border-red-200',
-    high: 'bg-orange-100 text-orange-800 border-orange-200',
-    medium: 'bg-amber-100 text-amber-800 border-amber-200',
-    low: 'bg-blue-100 text-blue-800 border-blue-200',
-    open: 'bg-red-50 text-red-700',
-    investigating: 'bg-indigo-50 text-indigo-700',
-    resolved: 'bg-green-50 text-green-700',
-    closed: 'bg-gray-100 text-gray-700',
+  const v: Record<string, string> = {
+    critical: 'bg-cg-severity-critical-bg text-cg-severity-critical border-cg-severity-critical-border',
+    high: 'bg-cg-severity-high-bg text-cg-severity-high border-cg-severity-high-border',
+    medium: 'bg-cg-severity-medium-bg text-cg-severity-medium border-cg-severity-medium-border',
+    low: 'bg-cg-severity-low-bg text-cg-severity-low border-cg-severity-low-border',
+    open: 'bg-cg-severity-high-bg text-cg-severity-high',
+    investigating: 'bg-cg-status-info/10 text-cg-status-info',
+    resolved: 'bg-cg-status-online/10 text-cg-status-online',
+    dismissed: 'bg-cg-bg-tertiary text-cg-text-secondary',
   };
-  return <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", v[variant] || v.open, className)}>{children}</span>;
-}
+  return (
+    <span
+      className={cn(
+        'px-2 py-0.5 rounded text-xs font-medium border border-transparent',
+        v[variant] || v.open,
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+};
 
 export default function IncidentsPage() {
+  const { user } = useAuthStore();
+  const canManageIncidents = hasPermission(user?.role || 'viewer', PERMISSIONS.MANAGE_INCIDENTS);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    incidentService
+      .getAll()
+      .then((res) => setIncidents(res.data))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 lg:p-6">
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <FileText className="w-6 h-6 mr-2 text-primary-600" /> Incidents
+          <h1 className="text-xl font-semibold text-cg-text-primary flex items-center gap-2">
+            <FileText className="w-5 h-5 text-brand-500" /> Incidents
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Track and manage formal incident reports.</p>
+          <p className="mt-0.5 text-sm text-cg-text-secondary">
+            Track and manage formal incident reports
+          </p>
         </div>
-        <button className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md font-medium flex items-center">
-          <Plus className="w-4 h-4 mr-2" /> Create Incident
-        </button>
+        {canManageIncidents && (
+          <Button icon={<Plus className="w-4 h-4" />}>Create Incident</Button>
+        )}
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex gap-4 bg-gray-50">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-            <input type="text" placeholder="Search incidents..." className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md" />
+      <div className="bg-cg-bg-secondary rounded-lg border border-cg-border-default shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-cg-border-default flex gap-4 bg-cg-bg-tertiary">
+          <div className="flex-1 max-w-md">
+            <SearchInput placeholder="Search incidents..." />
           </div>
-          <button className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-            <Filter className="w-4 h-4 mr-2" /> Filter
-          </button>
+          <Button variant="secondary" size="sm" icon={<Filter className="w-4 h-4" />}>
+            Filter
+          </Button>
         </div>
-        
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title & Details</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assignee</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-              <th scope="col" className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {mockIncidents.map((incident) => (
-              <tr key={incident.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">{incident.id}</td>
-                <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900 mb-1">{incident.title}</div>
-                  <div className="flex gap-2 items-center">
-                    <Badge variant={incident.severity} className="uppercase">{incident.severity}</Badge>
-                    <span className="text-xs text-gray-500">{incident.classroom}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Badge variant={incident.status} className="uppercase">{incident.status}</Badge>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{incident.assignee}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(incident.created).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <Link to={`/incidents/${incident.id}`} className="text-primary-600 hover:text-primary-900 font-medium">Manage</Link>
-                </td>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-cg-border-default">
+            <thead className="bg-cg-bg-tertiary">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  ID
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  Title & Details
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  Status
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  Assignee
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  Created
+                </th>
+                <th scope="col" className="relative px-6 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-cg-border-default">
+              {incidents.map((incident) => (
+                <tr key={incident.id} className="hover:bg-cg-bg-tertiary transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-cg-text-secondary">
+                    {incident.id}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-cg-text-primary mb-1">
+                      {incident.title}
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Badge variant={incident.severity} className="uppercase">
+                        {incident.severity}
+                      </Badge>
+                      <span className="text-xs text-cg-text-secondary">
+                        {incident.classroomName || incident.classroomId || 'N/A'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <Badge variant={incident.status} className="uppercase">
+                      {incident.status}
+                    </Badge>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-cg-text-secondary">
+                    {incident.assigneeName || incident.assignedTo || 'Unassigned'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-cg-text-secondary">
+                    {new Date(incident.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <Link
+                      to={`/incidents/${incident.id}`}
+                      className="text-brand-500 hover:text-brand-500/80 font-medium"
+                    >
+                      Manage
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

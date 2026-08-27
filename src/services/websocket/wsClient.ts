@@ -94,6 +94,11 @@ export class WebSocketClient {
   }
 }
 
-export const wsClient = new WebSocketClient(
-  import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws'
-);
+function getWsUrl(): string {
+  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
+  const loc = window.location;
+  const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${loc.host}/ws`;
+}
+
+export const wsClient = new WebSocketClient(getWsUrl());

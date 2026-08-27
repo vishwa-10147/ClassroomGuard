@@ -1,0 +1,27 @@
+{
+  "name": "ClassroomGuard",
+  "short_name": "ClassroomGuard",
+  "description": "AI-Powered Classroom Intelligence Platform",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0A0E14",
+  "theme_color": "#3B82F6",
+  "orientation": "any",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["security", "education"],
+  "prefer_related_applications": false
+}

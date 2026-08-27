@@ -33,7 +33,7 @@ export const Timeline: React.FC<TimelineProps> = ({ events, className }) => {
 
   return (
     <div className={cn('relative space-y-4 before:absolute before:inset-0 before:ml-2 before:h-full before:w-0.5 before:-translate-x-px before:bg-slate-200 dark:before:bg-slate-800 md:before:mx-auto md:before:translate-x-0', className)}>
-      {events.map((event, index) => {
+      {events.map((event) => {
         const dotColor = severityColors[event.severity || 'INFO'];
         
         return (

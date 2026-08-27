@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, User, Calendar, MapPin, MessageSquare, Paperclip, Video } from 'lucide-react';
+import { ArrowLeft, User, Calendar, MapPin, MessageSquare, Paperclip, Video, Loader2 } from 'lucide-react';
+import { incidentService } from '@/services/api/incidentService';
+import type { Incident } from '@/types/incident.types';
 
 const Badge = ({ children, className }: any) => (
   <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${className}`}>{children}</span>
@@ -7,18 +10,31 @@ const Badge = ({ children, className }: any) => (
 
 export default function IncidentDetailPage() {
   const { id } = useParams();
-  
-  // Use mock for demo
-  const incident = { 
-    id: id || 'INC-2023-001', 
-    title: 'Cheating suspected during Final Math Exam', 
-    severity: 'high', 
-    status: 'investigating', 
-    classroom: 'Room 302', 
-    assignee: 'Admin User', 
-    created: '2023-10-25T10:30:00Z',
-    description: 'Multiple alerts triggered for phone usage and suspicious head movements during the final exam period. Video evidence suggests student in seat D4 may have been using a device concealed under desk.',
-  };
+  const [incident, setIncident] = useState<Incident | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    incidentService.getById(id)
+      .then(setIncident)
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!incident) {
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto text-center py-24">
+        <p className="text-gray-500">Incident not found.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -65,20 +81,19 @@ export default function IncidentDetailPage() {
             </h2>
             
             <div className="space-y-4 mb-6">
-              <div className="bg-gray-50 rounded-lg p-4 text-sm border border-gray-100">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-semibold text-gray-900">System</span>
-                  <span className="text-xs text-gray-500">Oct 25, 10:30 AM</span>
-                </div>
-                <p className="text-gray-700">Incident automatically created from escalated alert ALT-892.</p>
-              </div>
-              <div className="bg-blue-50 rounded-lg p-4 text-sm border border-blue-100">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-semibold text-gray-900">Admin User</span>
-                  <span className="text-xs text-gray-500">Oct 25, 11:15 AM</span>
-                </div>
-                <p className="text-gray-700">Reviewed the footage. Forwarding to academic integrity board for review.</p>
-              </div>
+              {incident.notes && incident.notes.length > 0 ? (
+                incident.notes.map((note) => (
+                  <div key={note.id} className="bg-gray-50 rounded-lg p-4 text-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-semibold text-gray-900">{note.author}</span>
+                      <span className="text-xs text-gray-500">{new Date(note.timestamp).toLocaleString()}</span>
+                    </div>
+                    <p className="text-gray-700">{note.text}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500 italic">No notes yet.</p>
+              )}
             </div>
 
             <div>
@@ -98,9 +113,9 @@ export default function IncidentDetailPage() {
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
             <h3 className="font-semibold text-gray-900 border-b pb-2 mb-3">Details</h3>
             <ul className="space-y-3 text-sm">
-              <li className="flex items-center text-gray-600"><MapPin className="w-4 h-4 mr-2 text-gray-400" /> <span className="font-medium text-gray-900 ml-1">{incident.classroom}</span></li>
-              <li className="flex items-center text-gray-600"><Calendar className="w-4 h-4 mr-2 text-gray-400" /> <span className="ml-1">{new Date(incident.created).toLocaleString()}</span></li>
-              <li className="flex items-center text-gray-600"><User className="w-4 h-4 mr-2 text-gray-400" /> Assigned: <span className="font-medium text-gray-900 ml-1">{incident.assignee}</span></li>
+              <li className="flex items-center text-gray-600"><MapPin className="w-4 h-4 mr-2 text-gray-400" /> <span className="font-medium text-gray-900 ml-1">{incident.classroomName || incident.classroomId || 'N/A'}</span></li>
+              <li className="flex items-center text-gray-600"><Calendar className="w-4 h-4 mr-2 text-gray-400" /> <span className="ml-1">{new Date(incident.createdAt).toLocaleString()}</span></li>
+              <li className="flex items-center text-gray-600"><User className="w-4 h-4 mr-2 text-gray-400" /> Assigned: <span className="font-medium text-gray-900 ml-1">{incident.assigneeName || incident.assignedTo || 'Unassigned'}</span></li>
             </ul>
           </div>
 

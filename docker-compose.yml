@@ -1,0 +1,138 @@
+services:
+  postgres:
+    image: postgres:18
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: classroomguard
+      POSTGRES_PASSWORD: classroomguard_dev
+      POSTGRES_DB: classroomguard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - classguard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U classroomguard -d classroomguard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - classguard-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://classroomguard:classroomguard_dev@postgres:5432/classroomguard
+      JWT_SECRET: classroomguard-development-secret-change-in-production
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
+      FRONTEND_URL: http://localhost:3000
+      STORAGE_PATH: ./storage
+      APP_ENV: development
+      DEBUG: "true"
+      USE_REDIS: "true"
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./storage:/app/storage
+    networks:
+      - classguard-net
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A app.core.celery worker --loglevel=info --concurrency=4
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://classroomguard:classroomguard_dev@postgres:5432/classroomguard
+      JWT_SECRET: classroomguard-development-secret-change-in-production
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      STORAGE_PATH: ./storage
+      APP_ENV: development
+      DEBUG: "true"
+      USE_REDIS: "true"
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./storage:/app/storage
+    networks:
+      - classguard-net
+    restart: unless-stopped
+
+  ai:
+    build:
+      context: .
+      dockerfile: ai/Dockerfile
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+    volumes:
+      - ./ai/models:/app/models
+      - ./storage:/app/storage
+      - ./ai/config.yaml:/app/config.yaml
+    networks:
+      - classguard-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - classguard-net
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  classguard-net:
+    driver: bridge

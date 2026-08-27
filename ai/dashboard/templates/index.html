@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Guard - Cheating Detection</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 16px 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 1.4em; color: #00d4ff; }
+        .header .status { display: flex; gap: 16px; align-items: center; font-size: 0.85em; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+        .status-dot.green { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
+        .status-dot.red { background: #ff4444; box-shadow: 0 0 8px #ff4444; }
+        .main { display: grid; grid-template-columns: 1fr 360px; gap: 16px; padding: 16px; height: calc(100vh - 64px); }
+        .cameras { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .cam-card { background: #111118; border: 1px solid #222; border-radius: 10px; overflow: hidden; }
+        .cam-card .cam-header { padding: 10px 14px; background: #1a1a28; font-size: 0.85em; font-weight: 600; display: flex; justify-content: space-between; }
+        .cam-card img { width: 100%; display: block; aspect-ratio: 16/9; object-fit: contain; background: #000; }
+        .sidebar { display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+        .panel { background: #111118; border: 1px solid #222; border-radius: 10px; padding: 14px; }
+        .panel h3 { font-size: 0.9em; color: #00d4ff; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stat-box { background: #1a1a28; border-radius: 8px; padding: 12px; text-align: center; }
+        .stat-box .number { font-size: 1.8em; font-weight: 700; color: #00d4ff; }
+        .stat-box .label { font-size: 0.7em; color: #888; margin-top: 2px; text-transform: uppercase; }
+        .alerts-list { flex: 1; overflow-y: auto; }
+        .alert-item { padding: 10px; border-left: 3px solid #ff4444; margin-bottom: 8px; background: #1a1a1a; border-radius: 0 6px 6px 0; font-size: 0.82em; }
+        .alert-item.HIGH { border-left-color: #ff4444; }
+        .alert-item.MEDIUM { border-left-color: #ffaa00; }
+        .alert-item.LOW { border-left-color: #4488ff; }
+        .alert-item .alert-time { color: #666; font-size: 0.85em; }
+        .alert-item .alert-type { color: #ff6666; font-weight: 600; }
+        .alert-item.MEDIUM .alert-type { color: #ffaa00; }
+        .alert-item.LOW .alert-type { color: #4488ff; }
+        .fps-badge { background: #00cc66; color: #000; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .empty-state { text-align: center; color: #555; padding: 30px; font-size: 0.85em; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Classroom Guard</h1>
+        <div class="status">
+            <span><span class="status-dot green" id="statusDot"></span> <span id="statusText">Connected</span></span>
+            <span id="camCount">Cameras: 0</span>
+            <span id="uptime">Uptime: 00:00:00</span>
+        </div>
+    </div>
+    <div class="main">
+        <div>
+            <div class="cameras" id="cameraGrid"></div>
+        </div>
+        <div class="sidebar">
+            <div class="panel">
+                <h3>Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-box"><div class="number" id="totalStudents">0</div><div class="label">Students</div></div>
+                    <div class="stat-box"><div class="number" id="totalAlerts">0</div><div class="label">Alerts</div></div>
+                    <div class="stat-box"><div class="number" id="highAlerts">0</div><div class="label">High</div></div>
+                    <div class="stat-box"><div class="number" id="avgFps">0</div><div class="label">Avg FPS</div></div>
+                </div>
+            </div>
+            <div class="panel alerts-list">
+                <h3>Recent Alerts</h3>
+                <div id="alertsContainer">
+                    <div class="empty-state">No alerts yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const startTime = Date.now();
+        let alertCount = 0;
+
+        // Initialize camera feeds
+        const cameras = [0, 1];
+        const grid = document.getElementById('cameraGrid');
+        cameras.forEach(id => {
+            const card = document.createElement('div');
+            card.className = 'cam-card';
+            card.innerHTML = `
+                <div class="cam-header">
+                    <span>Camera ${id + 1}</span>
+                    <span class="fps-badge" id="fps-${id}">0 FPS</span>
+                </div>
+                <img src="/video/${id}" alt="Camera ${id}" onerror="this.style.display='none'">
+            `;
+            grid.appendChild(card);
+        });
+        document.getElementById('camCount').textContent = `Cameras: ${cameras.length}`;
+
+        // Socket events
+        socket.on('connect', () => {
+            document.getElementById('statusDot').className = 'status-dot green';
+            document.getElementById('statusText').textContent = 'Connected';
+        });
+        socket.on('disconnect', () => {
+            document.getElementById('statusDot').className = 'status-dot red';
+            document.getElementById('statusText').textContent = 'Disconnected';
+        });
+
+        socket.on('new_alert', (alert) => {
+            alertCount++;
+            document.getElementById('totalAlerts').textContent = alertCount;
+            if (alert.severity === 'HIGH') {
+                const h = parseInt(document.getElementById('highAlerts').textContent);
+                document.getElementById('highAlerts').textContent = h + 1;
+            }
+            const container = document.getElementById('alertsContainer');
+            if (container.querySelector('.empty-state')) container.innerHTML = '';
+            const div = document.createElement('div');
+            div.className = `alert-item ${alert.severity}`;
+            const time = new Date(alert.timestamp * 1000).toLocaleTimeString();
+            div.innerHTML = `
+                <div class="alert-time">${time} | Cam ${alert.camera_id} | Student #${alert.track_id}</div>
+                <div class="alert-type">${alert.alert_type.replace(/_/g, ' ').toUpperCase()}</div>
+                <div>${alert.message}</div>
+            `;
+            container.prepend(div);
+            if (container.children.length > 50) container.lastChild.remove();
+        });
+
+        socket.on('stats_update', (stats) => {
+            if (stats.total_students !== undefined) document.getElementById('totalStudents').textContent = stats.total_students;
+            if (stats.avg_fps !== undefined) document.getElementById('avgFps').textContent = stats.avg_fps.toFixed(0);
+            if (stats.fps) {
+                Object.entries(stats.fps).forEach(([camId, fps]) => {
+                    const el = document.getElementById(`fps-${camId}`);
+                    if (el) el.textContent = `${fps.toFixed(0)} FPS`;
+                });
+            }
+        });
+
+        // Uptime
+        setInterval(() => {
+            const diff = Math.floor((Date.now() - startTime) / 1000);
+            const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+            const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            const s = String(diff % 60).padStart(2, '0');
+            document.getElementById('uptime').textContent = `Uptime: ${h}:${m}:${s}`;
+        }, 1000);
+    </script>
+</body>
+</html>

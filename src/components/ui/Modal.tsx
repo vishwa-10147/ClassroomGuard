@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { cn } from '@/utils/cn';
 import { X } from 'lucide-react';
 import { IconButton } from './Button';
@@ -34,20 +34,52 @@ export function Modal({
   footer,
   className,
 }: ModalProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      // Focus trap
+      if (e.key === 'Tab' && contentRef.current) {
+        const focusable = contentRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
     },
     [onClose]
   );
 
   useEffect(() => {
     if (open) {
+      previousFocusRef.current = document.activeElement as HTMLElement;
       document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
+      // Focus the dialog content after render
+      requestAnimationFrame(() => {
+        contentRef.current?.focus();
+      });
       return () => {
         document.removeEventListener('keydown', handleKeyDown);
         document.body.style.overflow = '';
+        previousFocusRef.current?.focus();
       };
     }
   }, [open, handleKeyDown]);
@@ -65,14 +97,16 @@ export function Modal({
 
       {/* Modal content */}
       <div
+        ref={contentRef}
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby={title ? 'modal-title' : undefined}
         aria-describedby={description ? 'modal-description' : undefined}
         className={cn(
           'relative z-10 w-full rounded-lg border border-cg-border-default bg-cg-bg-secondary shadow-cg-xl',
           'animate-fade-in',
-          'max-h-[85vh] overflow-hidden',
+          'max-h-[85vh] overflow-hidden outline-none',
           'max-md:max-w-none max-md:rounded-none max-md:border-0 max-md:h-full max-md:max-h-full',
           modalSizes[size],
           className

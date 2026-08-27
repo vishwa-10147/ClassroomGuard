@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
-import { Bell, CheckCircle, Clock } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Bell, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
-
-const mockAlerts = [
-  { id: 'ALT-001', title: 'Multiple Phones Detected', description: '3 phones detected simultaneously in Classroom 101 during exam period.', severity: 'high', status: 'active', timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(), classroom: 'Classroom 101' },
-  { id: 'ALT-002', title: 'Suspicious Movement', description: 'Student moving between desks repeatedly.', severity: 'medium', status: 'active', timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(), classroom: 'Classroom 105' },
-  { id: 'ALT-003', title: 'Camera Offline', description: 'Camera CAM-04 lost connection.', severity: 'high', status: 'acknowledged', timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(), classroom: 'Hall A' },
-  { id: 'ALT-004', title: 'Unauthorized Material', description: 'Book detected on desk during closed-book exam.', severity: 'medium', status: 'resolved', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), classroom: 'Lab 2' },
-];
+import { alertService } from '@/services/api/alertService';
+import type { Alert, AlertStatus } from '@/types/alert.types';
+import { useAuthStore } from '@/stores/authStore';
+import { hasPermission } from '@/utils/permissions';
+import { PERMISSIONS } from '@/utils/constants';
 
 const Tabs = ({ tabs, active, onChange }: any) => (
   <div className="flex space-x-1 border-b border-gray-200 mb-6">
@@ -29,11 +27,42 @@ const Tabs = ({ tabs, active, onChange }: any) => (
 );
 
 export default function AlertsPage() {
-  const [activeTab, setActiveTab] = useState('active');
+  const { user } = useAuthStore();
+  const canManageAlerts = hasPermission(user?.role || 'viewer', PERMISSIONS.MANAGE_ALERTS);
+  const [activeTab, setActiveTab] = useState<AlertStatus>('active');
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const activeCount = mockAlerts.filter(a => a.status === 'active').length;
-  
-  const filteredAlerts = mockAlerts.filter(a => a.status === activeTab);
+  const fetchAlerts = useCallback(() => {
+    setLoading(true);
+    alertService.getAll(activeTab)
+      .then(setAlerts)
+      .finally(() => setLoading(false));
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  const handleAcknowledge = async (id: string) => {
+    await alertService.acknowledge(id);
+    fetchAlerts();
+  };
+
+  const handleResolve = async (id: string) => {
+    await alertService.resolve(id);
+    fetchAlerts();
+  };
+
+  const activeCount = alerts.filter(a => a.status === 'active').length;
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -47,7 +76,7 @@ export default function AlertsPage() {
       <Tabs 
         tabs={[
           { id: 'active', label: 'Active', count: activeCount },
-          { id: 'acknowledged', label: 'Acknowledledged' },
+          { id: 'acknowledged', label: 'Acknowledged' },
           { id: 'resolved', label: 'Resolved' },
         ]}
         active={activeTab}
@@ -55,14 +84,14 @@ export default function AlertsPage() {
       />
 
       <div className="space-y-4">
-        {filteredAlerts.length === 0 ? (
+        {alerts.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200 border-dashed">
             <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-gray-900">All clear</h3>
             <p className="text-gray-500 text-sm">No alerts in this category.</p>
           </div>
         ) : (
-          filteredAlerts.map(alert => (
+          alerts.map(alert => (
             <div key={alert.id} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex relative">
               <div className={cn(
                 "w-1.5 flex-shrink-0",
@@ -84,16 +113,30 @@ export default function AlertsPage() {
                   <p className="text-sm text-gray-600 mb-2">{alert.description}</p>
                   <div className="flex items-center gap-4 text-xs text-gray-500">
                     <span className="flex items-center"><Clock className="w-3.5 h-3.5 mr-1" /> {new Date(alert.timestamp).toLocaleString()}</span>
-                    <span>Classroom: <span className="font-medium text-gray-700">{alert.classroom}</span></span>
+                    <span>Classroom: <span className="font-medium text-gray-700">{alert.classroomName || alert.classroomId || 'N/A'}</span></span>
                   </div>
                 </div>
                 
                 <div className="flex sm:flex-col gap-2">
                   {alert.status === 'active' && (
-                    <button className="px-3 py-1.5 text-sm font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Acknowledge</button>
+                    <button
+                      onClick={() => handleAcknowledge(alert.id)}
+                      className="px-3 py-1.5 text-sm font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      disabled={!canManageAlerts}
+                      title={!canManageAlerts ? "Insufficient permissions" : undefined}
+                    >
+                      Acknowledge
+                    </button>
                   )}
                   {alert.status !== 'resolved' && (
-                    <button className="px-3 py-1.5 text-sm font-medium bg-primary-600 text-white rounded hover:bg-primary-700">Resolve</button>
+                    <button
+                      onClick={() => handleResolve(alert.id)}
+                      className="px-3 py-1.5 text-sm font-medium bg-primary-600 text-white rounded hover:bg-primary-700"
+                      disabled={!canManageAlerts}
+                      title={!canManageAlerts ? "Insufficient permissions" : undefined}
+                    >
+                      Resolve
+                    </button>
                   )}
                   <button className="px-3 py-1.5 text-sm font-medium text-primary-600 border border-primary-200 rounded hover:bg-primary-50">Investigate</button>
                 </div>

@@ -1,0 +1,61 @@
+# === Dependencies ===
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# === Build Output ===
+dist/
+build/
+*.egg-info/
+
+# === Environment ===
+.env
+.env.local
+.env.*.local
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === AI / Model Artifacts ===
+ai/models/*.pt
+ai/models/*.engine
+ai/models/*.onnx
+ai/models/*.weights
+ai/logs/
+ai/data/images/
+ai/data/labels/
+ai/runs/
+ai/train/runs/
+ai/analysis_results.json
+
+# === Storage (runtime data) ===
+storage/evidence/*
+storage/frames/*
+storage/recordings/*
+!storage/evidence/.gitkeep
+!storage/frames/.gitkeep
+!storage/recordings/.gitkeep
+
+# === Database ===
+database/*.db
+database/*.sqlite3
+
+# === Backups ===
+backups/
+
+# === TypeScript ===
+*.tsbuildinfo
+
+# === Misc ===
+*.log
+*.tmp
+*.cache

@@ -1,101 +1,193 @@
-import { Video, Upload, Play, Download, Trash, BarChart } from 'lucide-react';
-import { cn } from '@/utils/cn';
+import { useState, useEffect } from 'react';
+import { Video, Upload, Play, Download, Trash, BarChart, Loader2 } from 'lucide-react';
+import { recordingService } from '@/services/api/recordingService';
+import type { Recording } from '@/types/recording.types';
+import { useAuthStore } from '@/stores/authStore';
+import { hasPermission } from '@/utils/permissions';
+import { PERMISSIONS } from '@/utils/constants';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { VideoPlayer } from '@/features/recordings/components/VideoPlayer';
 
-const mockRecordings = [
-  { id: 'REC-1', name: 'CS101 Final Exam - Front', classroom: 'Hall A', duration: 7200, size: '2.4 GB', status: 'processed', detections: 42, date: '2023-10-25' },
-  { id: 'REC-2', name: 'Physics Midterm', classroom: 'Room 302', duration: 3600, size: '1.1 GB', status: 'processing', progress: 45, date: '2023-10-26' },
-  { id: 'REC-3', name: 'Chemistry Lab Session', classroom: 'Lab 2', duration: 5400, size: '1.8 GB', status: 'failed', date: '2023-10-24' },
-];
-
-const Badge = ({ status, progress }: any) => {
-  if (status === 'processed') return <span className="px-2 py-1 rounded bg-green-100 text-green-800 text-xs font-bold uppercase">Processed</span>;
-  if (status === 'failed') return <span className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs font-bold uppercase">Failed</span>;
-  if (status === 'processing') return (
-    <div className="flex items-center gap-2">
-      <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 text-xs font-bold uppercase animate-pulse">Processing</span>
-      <span className="text-xs text-gray-500 font-mono">{progress}%</span>
-    </div>
-  );
+const Badge = ({ status, progress }: { status: string; progress?: number }) => {
+  if (status === 'completed')
+    return (
+      <span className="px-2 py-1 rounded bg-cg-status-online/10 text-cg-status-online text-xs font-bold uppercase">
+        Completed
+      </span>
+    );
+  if (status === 'failed')
+    return (
+      <span className="px-2 py-1 rounded bg-cg-status-error/10 text-cg-status-error text-xs font-bold uppercase">
+        Failed
+      </span>
+    );
+  if (status === 'processing' || status === 'queued')
+    return (
+      <div className="flex items-center gap-2">
+        <span className="px-2 py-1 rounded bg-cg-status-info/10 text-cg-status-info text-xs font-bold uppercase animate-pulse">
+          {status}
+        </span>
+        {progress !== undefined && (
+          <span className="text-xs text-cg-text-secondary font-mono">{progress}%</span>
+        )}
+      </div>
+    );
   return null;
-}
-
-const formatDuration = (sec: number) => {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  return `${h}h ${m}m`;
-}
+};
 
 export default function RecordingsPage() {
+  const { user } = useAuthStore();
+  const canManageRecordings = hasPermission(user?.role || 'viewer', PERMISSIONS.MANAGE_RECORDINGS);
+  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [playingRecording, setPlayingRecording] = useState<Recording | null>(null);
+
+  useEffect(() => {
+    recordingService
+      .getAll()
+      .then(setRecordings)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 lg:p-6">
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <Video className="w-6 h-6 mr-2 text-primary-600" /> Recordings & Analysis
+          <h1 className="text-xl font-semibold text-cg-text-primary flex items-center gap-2">
+            <Video className="w-5 h-5 text-brand-500" /> Recordings & Analysis
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Upload offline videos for AI analysis or review past recordings.</p>
+          <p className="mt-0.5 text-sm text-cg-text-secondary">
+            Upload offline videos for AI analysis or review past recordings
+          </p>
         </div>
-        <button className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md font-medium flex items-center">
-          <Upload className="w-4 h-4 mr-2" /> Upload Video
-        </button>
+        {canManageRecordings && (
+          <Button icon={<Upload className="w-4 h-4" />}>Upload Video</Button>
+        )}
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Recording Name</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Results</th>
-              <th scope="col" className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {mockRecordings.map((rec) => (
-              <tr key={rec.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded flex items-center justify-center">
-                      <Play className="h-5 w-5 text-gray-500" />
-                    </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{rec.name}</div>
-                      <div className="text-xs text-gray-500">{rec.date}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div>{rec.classroom}</div>
-                  <div className="text-xs">{formatDuration(rec.duration)} • {rec.size}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <Badge status={rec.status} progress={rec.progress} />
-                  {rec.status === 'processing' && (
-                     <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                        <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${rec.progress}%` }}></div>
-                     </div>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {rec.status === 'processed' ? (
-                    <span className="font-medium text-gray-900">{rec.detections} events</span>
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex justify-end space-x-3">
-                    <button className="text-gray-400 hover:text-primary-600" title="View Analysis" disabled={rec.status !== 'processed'}><BarChart className="w-4 h-4" /></button>
-                    <button className="text-gray-400 hover:text-gray-700" title="Download"><Download className="w-4 h-4" /></button>
-                    <button className="text-gray-400 hover:text-red-600" title="Delete"><Trash className="w-4 h-4" /></button>
-                  </div>
-                </td>
+      <div className="bg-cg-bg-secondary rounded-lg border border-cg-border-default shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-cg-border-default">
+            <thead className="bg-cg-bg-tertiary">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  Recording Name
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  Details
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  Status
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
+                  Results
+                </th>
+                <th scope="col" className="relative px-6 py-3">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-cg-border-default">
+              {recordings.map((rec) => (
+                <tr key={rec.id} className="hover:bg-cg-bg-tertiary transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10 bg-cg-bg-tertiary rounded flex items-center justify-center">
+                        <Play className="h-5 w-5 text-cg-text-muted" />
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-cg-text-primary">
+                          {rec.name || rec.filename}
+                        </div>
+                        <div className="text-xs text-cg-text-secondary">
+                          {rec.uploadedAt ? new Date(rec.uploadedAt).toLocaleDateString() : ''}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-cg-text-secondary">
+                    <div>{rec.classroomName || rec.classroomId || 'N/A'}</div>
+                    <div className="text-xs">
+                      {rec.duration} &bull; {rec.fileSize}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <Badge status={rec.status} progress={rec.progress} />
+                    {rec.status === 'processing' && rec.progress !== undefined && (
+                      <div className="w-full bg-cg-bg-tertiary rounded-full h-1.5 mt-2">
+                        <div
+                          className="bg-brand-500 h-1.5 rounded-full"
+                          style={{ width: `${rec.progress}%` }}
+                        />
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {rec.status === 'completed' ? (
+                      <span className="font-medium text-cg-text-primary">
+                        {rec.detectionCount ?? rec.eventCount ?? 0} events
+                      </span>
+                    ) : (
+                      <span className="text-cg-text-muted">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex justify-end space-x-3">
+                      {rec.status === 'completed' && (
+                        <button
+                          className="text-cg-text-muted hover:text-brand-500"
+                          title="Play Recording"
+                          onClick={() => setPlayingRecording(rec)}
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        className="text-cg-text-muted hover:text-brand-500"
+                        title="View Analysis"
+                        disabled={rec.status !== 'completed'}
+                      >
+                        <BarChart className="w-4 h-4" />
+                      </button>
+                      <button className="text-cg-text-muted hover:text-cg-text-primary" title="Download">
+                        <Download className="w-4 h-4" />
+                      </button>
+                      {canManageRecordings && (
+                        <button className="text-cg-text-muted hover:text-cg-status-error" title="Delete">
+                          <Trash className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      <Modal
+        open={!!playingRecording}
+        onClose={() => setPlayingRecording(null)}
+        title={playingRecording?.name || playingRecording?.filename || 'Recording'}
+        size="xl"
+      >
+        {playingRecording && (
+          <VideoPlayer
+            src={`/api/v1/uploads/video/${playingRecording.filename}`}
+            title={playingRecording.name || playingRecording.filename}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
