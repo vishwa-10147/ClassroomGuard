@@ -40,6 +40,9 @@ ai/analysis_results.json
 # === Test media ===
 test_data/
 
+# === Runtime logs (created by start.cmd) ===
+logs/
+
 # === Storage (runtime data) ===
 storage/evidence/*
 storage/frames/*
