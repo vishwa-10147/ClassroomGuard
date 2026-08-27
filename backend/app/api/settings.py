@@ -1,14 +1,8 @@
 import json
-import os
 import platform
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
 
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
@@ -19,8 +13,10 @@ from backend.app.schemas.system_setting import (
     SettingBulkUpdate,
     SettingGroupResponse,
     SettingResponse,
-    SettingUpdate,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1", tags=["Settings"])
 
@@ -103,7 +99,7 @@ async def bulk_update_settings(
             db.add(setting)
         else:
             setting.value = json.dumps(item.value)
-            setting.updated_at = datetime.now(timezone.utc)
+            setting.updated_at = datetime.now(UTC)
         old_values[item.key] = old_val
         new_values[item.key] = json.dumps(item.value)
         await db.flush()

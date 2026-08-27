@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncGenerator
-from functools import wraps
-from typing import Callable
-
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.database import AsyncSessionLocal
 from backend.app.core.security import decode_access_token
 from backend.app.core.tenant import current_org_id
 from backend.app.models.user import User
-
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 bearer_scheme = HTTPBearer(auto_error=False)
 

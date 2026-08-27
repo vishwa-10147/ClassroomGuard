@@ -1,7 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
-from tests.conftest import login, auth_header
+from tests.conftest import auth_header, login
 
 CREDS = {
     "super_admin": ("admin@classguard.dev", "Admin@12345"),

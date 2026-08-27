@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
-
-from redis.asyncio import Redis, ConnectionPool
 
 from backend.app.core.config import settings
+from redis.asyncio import ConnectionPool, Redis
 
 logger = logging.getLogger(__name__)
 
-_pool: Optional[ConnectionPool] = None
-_client: Optional[Redis] = None
+_pool: ConnectionPool | None = None
+_client: Redis | None = None
 
 
 def _build_pool() -> ConnectionPool:
@@ -21,7 +19,7 @@ def _build_pool() -> ConnectionPool:
     )
 
 
-def get_redis() -> Optional[Redis]:
+def get_redis() -> Redis | None:
     """Return an async Redis client, or None if Redis is disabled/unavailable."""
     global _pool, _client
     if not settings.use_redis:

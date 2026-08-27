@@ -4,11 +4,10 @@ import functools
 import hashlib
 import json
 import logging
-from typing import Callable, Optional
-
-from fastapi import Request, Response
+from collections.abc import Callable
 
 from backend.app.core.redis import get_redis
+from fastapi import Request, Response
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +48,7 @@ def cache_response(ttl: int = 300, prefix: str = ""):
 
             try:
                 body = response.body if hasattr(response, "body") else json.dumps(response).encode()
-                if isinstance(body, (bytes, bytearray)):
+                if isinstance(body, (bytes | bytearray)):
                     raw = body
                 else:
                     raw = json.dumps(response).encode()

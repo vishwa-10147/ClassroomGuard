@@ -1,6 +1,5 @@
-from fastapi import HTTPException
-
 from backend.app.core.tenant import current_org_id
+from fastapi import HTTPException
 
 
 def get_current_org_id() -> str:

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from celery import Celery
-
 from backend.app.core.config import settings
+from celery import Celery
 
 broker_url = settings.redis_url.replace("/0", "/1") if settings.use_redis else "memory://"
 result_backend = settings.redis_url.replace("/0", "/2") if settings.use_redis else "cache+memory://"

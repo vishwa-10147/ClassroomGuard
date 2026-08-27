@@ -3,11 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Optional
-
-from fastapi import WebSocket
 
 from backend.app.core.config import settings
+from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +15,7 @@ CHANNEL = "alerts"
 class ConnectionManager:
     def __init__(self):
         self.active_connections: list[WebSocket] = []
-        self._redis_subscriber_task: Optional[asyncio.Task] = None
+        self._redis_subscriber_task: asyncio.Task | None = None
         self._redis_pub = None
 
     async def connect(self, websocket: WebSocket):

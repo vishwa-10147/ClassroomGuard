@@ -5,7 +5,8 @@ import json
 import logging
 import os
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from backend.app.core.celery import celery_app
 
@@ -21,19 +22,19 @@ def _run_async(coro):
 
 
 async def _compile_user_data_export_inner(user_id: str, org_id: str | None) -> dict:
-    from sqlalchemy import select
     from backend.app.core.database import AsyncSessionLocal
     from backend.app.models.alert import Alert
     from backend.app.models.audit_log import AuditLog
+    from backend.app.models.compliance_log import ComplianceLog
     from backend.app.models.consent import UserConsent
     from backend.app.models.detection_event import DetectionEvent
     from backend.app.models.recording import Recording
     from backend.app.models.user import User
-    from backend.app.models.compliance_log import ComplianceLog
+    from sqlalchemy import select
 
-    data = {
+    data: dict[str, Any] = {
         "user_id": user_id,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "profile": {},
         "alerts": [],
         "detection_events": [],
@@ -115,7 +116,7 @@ async def _compile_user_data_export_inner(user_id: str, org_id: str | None) -> d
     exports_dir = os.path.join(storage, "exports")
     os.makedirs(exports_dir, exist_ok=True)
 
-    filename = f"user_export_{user_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.zip"
+    filename = f"user_export_{user_id}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.zip"
     file_path = os.path.join(exports_dir, filename)
 
     with zipfile.ZipFile(file_path, "w", zipfile.ZIP_DEFLATED) as zf:

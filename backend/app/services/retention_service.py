@@ -3,18 +3,15 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import UTC, datetime, timedelta
 
 from backend.app.models.alert import Alert
 from backend.app.models.audit_log import AuditLog
 from backend.app.models.compliance_log import ComplianceLog
 from backend.app.models.recording import Recording
 from backend.app.models.retention_policy import RetentionPolicy
-from backend.app.core.database import AsyncSessionLocal
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +31,7 @@ _RESOURCE_MODELS = {
 
 async def ensure_default_policies(
     db: AsyncSession,
-    organization_id: Optional[str] = None,
+    organization_id: str | None = None,
 ) -> list[RetentionPolicy]:
     existing = await db.execute(
         select(RetentionPolicy).where(
@@ -63,7 +60,7 @@ async def ensure_default_policies(
 
 async def get_policies(
     db: AsyncSession,
-    organization_id: Optional[str] = None,
+    organization_id: str | None = None,
 ) -> list[RetentionPolicy]:
     query = select(RetentionPolicy).where(RetentionPolicy.is_active.is_(True))
     if organization_id:
@@ -74,23 +71,24 @@ async def get_policies(
 
 async def check_expired_resources(
     db: AsyncSession,
-    organization_id: Optional[str] = None,
+    organization_id: str | None = None,
 ) -> dict[str, list[dict]]:
     policies = await get_policies(db, organization_id)
     expired: dict[str, list[dict]] = {}
 
     for policy in policies:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=policy.retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=policy.retention_days)
         model = _RESOURCE_MODELS.get(policy.resource_type)
         if model is None:
             continue
 
         timestamp_col = getattr(model, "created_at", None) or getattr(model, "timestamp", None)
-        if timestamp_col is None:
+        id_col = getattr(model, "id", None)
+        if timestamp_col is None or id_col is None:
             continue
 
         result = await db.execute(
-            select(model.id, timestamp_col).where(timestamp_col < cutoff).limit(1000)
+            select(id_col, timestamp_col).where(timestamp_col < cutoff).limit(1000)
         )
         rows = result.all()
         if rows:
@@ -104,11 +102,14 @@ async def check_expired_resources(
 
 async def delete_expired(
     db: AsyncSession,
-    organization_id: Optional[str] = None,
+    organization_id: str | None = None,
     dry_run: bool = True,
-    storage_path: Optional[str] = None,
+    storage_path: str | None = None,
 ) -> dict:
-    storage = storage_path or os.environ.get("STORAGE_PATH", "./storage")
+    if storage_path is None:
+        storage = os.environ.get("STORAGE_PATH") or "./storage"
+    else:
+        storage = storage_path
     policies = await get_policies(db, organization_id)
     summary: dict[str, int] = {}
 
@@ -116,7 +117,7 @@ async def delete_expired(
         if not policy.auto_delete:
             continue
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=policy.retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=policy.retention_days)
         model = _RESOURCE_MODELS.get(policy.resource_type)
         if model is None:
             continue

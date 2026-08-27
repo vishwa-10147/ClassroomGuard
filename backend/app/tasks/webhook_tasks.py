@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.app.core.celery import celery_app
 from backend.app.core.database import AsyncSessionLocal
@@ -47,7 +47,7 @@ async def _deliver_inner(webhook_id: str, event: str, payload: dict) -> dict:
         db.add(delivery)
 
         if delivery_result["status"] == "success":
-            webhook.last_triggered_at = datetime.now(timezone.utc)
+            webhook.last_triggered_at = datetime.now(UTC)
             webhook.failure_count = 0
         else:
             webhook.failure_count += 1

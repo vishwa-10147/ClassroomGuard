@@ -1,11 +1,10 @@
 import asyncio
 from uuid import uuid4
 
-from sqlalchemy import select
-
-from backend.app.core.database import init_db, AsyncSessionLocal
+from backend.app.core.database import AsyncSessionLocal, init_db
 from backend.app.core.security import hash_password
 from backend.app.models.user import User
+from sqlalchemy import select
 
 USERS = [
     {

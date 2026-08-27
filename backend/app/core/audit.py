@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
-
-from fastapi import Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any
 
 from backend.app.models.audit_log import AuditLog
 from backend.app.models.user import User
+from fastapi import Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def get_client_ip(request: Optional[Request]) -> Optional[str]:
+def get_client_ip(request: Request | None) -> str | None:
     if request is None:
         return None
     forwarded = request.headers.get("x-forwarded-for")
@@ -21,13 +20,13 @@ def get_client_ip(request: Optional[Request]) -> Optional[str]:
     return None
 
 
-def get_user_agent(request: Optional[Request]) -> Optional[str]:
+def get_user_agent(request: Request | None) -> str | None:
     if request is None:
         return None
     return request.headers.get("user-agent")
 
 
-def _serialize(value: Any) -> Optional[str]:
+def _serialize(value: Any) -> str | None:
     if value is None:
         return None
     if isinstance(value, str):
@@ -40,14 +39,14 @@ def _serialize(value: Any) -> Optional[str]:
 
 async def log_audit(
     db: AsyncSession,
-    user: Optional[User],
+    user: User | None,
     action: str,
     resource_type: str,
-    resource_id: Optional[str] = None,
+    resource_id: str | None = None,
     old_value: Any = None,
     new_value: Any = None,
-    request: Optional[Request] = None,
-    details: Optional[str] = None,
+    request: Request | None = None,
+    details: str | None = None,
 ) -> AuditLog:
     ip_address = get_client_ip(request)
     user_agent = get_user_agent(request)

@@ -1,10 +1,9 @@
 import time
 
+from backend.app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
-
-from backend.app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY
 
 _EXCLUDED_PATHS = frozenset({"/health", "/health/ready", "/health/detailed", "/metrics"})
 

@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Any
 from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel
 
 
 def _to_camel(s: str) -> str:
@@ -12,10 +13,10 @@ class IncidentCreate(BaseModel):
     title: str
     description: str
     severity: str = "medium"
-    classroom_id: Optional[str] = None
-    camera_id: Optional[str] = None
-    assigned_to: Optional[str] = None
-    event_ids: Optional[Any] = None
+    classroom_id: str | None = None
+    camera_id: str | None = None
+    assigned_to: str | None = None
+    event_ids: Any | None = None
 
     model_config = {
         "alias_generator": _to_camel,
@@ -24,12 +25,12 @@ class IncidentCreate(BaseModel):
 
 
 class IncidentUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    severity: Optional[str] = None
-    status: Optional[str] = None
-    assigned_to: Optional[str] = None
-    notes: Optional[Any] = None
+    title: str | None = None
+    description: str | None = None
+    severity: str | None = None
+    status: str | None = None
+    assigned_to: str | None = None
+    notes: Any | None = None
 
     model_config = {
         "alias_generator": _to_camel,
@@ -43,19 +44,19 @@ class IncidentResponse(BaseModel):
     description: str
     severity: str
     status: str
-    classroom_id: Optional[str] = None
-    classroom_name: Optional[str] = None
-    camera_id: Optional[str] = None
-    camera_name: Optional[str] = None
-    assigned_to: Optional[str] = None
-    assignee_name: Optional[str] = None
-    event_ids: Optional[Any] = None
-    evidence: Optional[Any] = None
-    evidence_count: Optional[int] = None
-    notes: Optional[Any] = None
+    classroom_id: str | None = None
+    classroom_name: str | None = None
+    camera_id: str | None = None
+    camera_name: str | None = None
+    assigned_to: str | None = None
+    assignee_name: str | None = None
+    event_ids: Any | None = None
+    evidence: Any | None = None
+    evidence_count: int | None = None
+    notes: Any | None = None
     created_at: datetime
     updated_at: datetime
-    resolved_at: Optional[datetime] = None
+    resolved_at: datetime | None = None
 
     model_config = {
         "from_attributes": True,

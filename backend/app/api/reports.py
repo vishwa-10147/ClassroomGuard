@@ -1,26 +1,24 @@
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from typing import Optional
-from datetime import datetime, timedelta
-import io
 import csv
+import io
+from datetime import datetime
 
 from backend.app.api.dependencies import get_db, require_permission
-from backend.app.models.detection_event import DetectionEvent
 from backend.app.models.alert import Alert
 from backend.app.models.camera import Camera
-from backend.app.models.classroom import Classroom
+from backend.app.models.detection_event import DetectionEvent
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/reports", tags=["Reports"])
 
 
 @router.get("/generate")
 async def generate_report(
-    classroom_id: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    classroom_id: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("reports:read")),
 ):
@@ -62,9 +60,9 @@ async def generate_report(
 
 @router.get("/export/csv")
 async def export_csv(
-    classroom_id: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    classroom_id: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("reports:read")),
 ):
@@ -100,9 +98,9 @@ async def export_csv(
 
 @router.get("/export/pdf")
 async def export_pdf(
-    classroom_id: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    classroom_id: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("reports:read")),
 ):

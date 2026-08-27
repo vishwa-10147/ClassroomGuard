@@ -1,24 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from typing import Optional
 from datetime import datetime
 
-from backend.app.api.dependencies import get_db, get_current_user, require_permission
+from backend.app.api.dependencies import get_db, require_permission
+from backend.app.api.notifications import send_push_notification
 from backend.app.core.audit import log_audit
 from backend.app.core.websocket import manager
 from backend.app.models.alert import Alert
-from backend.app.models.classroom import Classroom
 from backend.app.models.camera import Camera
-from backend.app.schemas.alert import (
-    AlertResponse,
-    AlertCreate,
-    AlertAcknowledge,
-    AlertResolve,
-    AlertAssign,
-)
-from backend.app.api.notifications import send_push_notification
+from backend.app.models.classroom import Classroom
 from backend.app.models.push_token import PushToken
+from backend.app.schemas.alert import (
+    AlertAssign,
+    AlertCreate,
+    AlertResponse,
+)
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts"])
 
@@ -45,7 +42,7 @@ async def create_alert(
 
     try:
         result = await db.execute(
-            select(PushToken.token).where(PushToken.is_active == True)
+            select(PushToken.token).where(PushToken.is_active)
         )
         tokens = [row[0] for row in result.all()]
         for token in tokens:
@@ -98,9 +95,9 @@ def _enrich_alert(alert, classroom_name=None, camera_name=None):
 
 @router.get("", response_model=list[AlertResponse])
 async def list_alerts(
-    status: Optional[str] = Query(None),
-    severity: Optional[str] = Query(None),
-    classroom_id: Optional[str] = Query(None),
+    status: str | None = Query(None),
+    severity: str | None = Query(None),
+    classroom_id: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),

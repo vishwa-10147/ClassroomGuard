@@ -1,17 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Optional
-import httpx
 
-from backend.app.api.dependencies import get_db, get_current_user
+import httpx
+from backend.app.api.dependencies import get_current_user, get_db
 from backend.app.models.push_token import PushToken
 from backend.app.schemas.push_token import PushTokenRegister, PushTokenResponse
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
 
 
-async def send_push_notification(token: str, title: str, body: str, data: Optional[dict] = None):
+async def send_push_notification(token: str, title: str, body: str, data: dict | None = None):
     payload = {
         "to": token,
         "title": title,
@@ -57,7 +56,7 @@ async def list_tokens(
     _user=Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PushToken).where(PushToken.is_active == True)
+        select(PushToken).where(PushToken.is_active)
     )
     return result.scalars().all()
 

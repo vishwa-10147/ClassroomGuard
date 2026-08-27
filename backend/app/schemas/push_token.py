@@ -1,6 +1,6 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel
 
 
 class PushTokenRegister(BaseModel):
@@ -16,7 +16,7 @@ class PushTokenResponse(BaseModel):
     id: str
     token: str
     platform: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     created_at: datetime
     is_active: bool
 

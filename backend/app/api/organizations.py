@@ -1,12 +1,7 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
-from backend.app.core.tenant import current_org_id
 from backend.app.models.alert import Alert
 from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
@@ -20,6 +15,9 @@ from backend.app.schemas.organization import (
     OrganizationStats,
     OrganizationUpdate,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(
     prefix="/api/v1/organizations",

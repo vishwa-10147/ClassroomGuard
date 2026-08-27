@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import select
-
 from backend.app.core.database import AsyncSessionLocal
 from backend.app.models.webhook import Webhook
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 

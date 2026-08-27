@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 def _to_camel(s: str) -> str:
@@ -12,26 +12,26 @@ class RecordingResponse(BaseModel):
     id: str
     name: str
     filename: str
-    file_path: Optional[str] = None
-    classroom_id: Optional[str] = None
-    classroom_name: Optional[str] = None
-    camera_id: Optional[str] = None
-    camera_name: Optional[str] = None
+    file_path: str | None = None
+    classroom_id: str | None = None
+    classroom_name: str | None = None
+    camera_id: str | None = None
+    camera_name: str | None = None
     status: str = Field(default="queued", validation_alias="processing_state")
     progress: int = Field(default=0, validation_alias="processing_progress")
     duration: float = 0
     file_size: int = 0
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
     current_frame: int = 0
     total_frames: int = 0
-    phase: Optional[str] = None
+    phase: str | None = None
     detection_count: int = 0
     event_count: int = 0
-    error: Optional[str] = None
-    error_message: Optional[str] = None
+    error: str | None = None
+    error_message: str | None = None
     uploaded_at: datetime
-    processed_at: Optional[datetime] = None
+    processed_at: datetime | None = None
     created_at: datetime
 
     model_config = {

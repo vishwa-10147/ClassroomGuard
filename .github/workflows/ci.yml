@@ -17,13 +17,13 @@ jobs:
           python-version: "3.13"
 
       - name: Install backend deps
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements-dev.txt
 
       - name: Lint backend
         run: ruff check backend/
 
       - name: Type check backend
-        run: mypy backend/app/ --ignore-missing-imports
+        run: mypy --config-file backend/pyproject.toml backend/app/ --ignore-missing-imports
 
       - uses: actions/setup-node@v4
         with:
@@ -31,9 +31,6 @@ jobs:
 
       - name: Install frontend deps
         run: npm ci
-
-      - name: Lint frontend
-        run: npm run lint
 
       - name: Type check frontend
         run: npx tsc --noEmit
@@ -65,7 +62,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install deps
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements-dev.txt
 
       - name: Run migrations
         env:

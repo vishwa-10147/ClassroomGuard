@@ -1,17 +1,9 @@
-import asyncio
-import io
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import cv2
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import StreamingResponse
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.app.api.dependencies import get_db, require_permission
-from backend.app.api.tenant_deps import get_current_org_id
 from backend.app.core.audit import log_audit
 from backend.app.core.limits import check_camera_limit
 from backend.app.core.tenant import current_org_id
@@ -24,7 +16,10 @@ from backend.app.schemas.camera import (
     CameraResponse,
     CameraUpdate,
 )
-
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(
     prefix="/api/v1/cameras",
@@ -213,7 +208,7 @@ async def update_camera(
     for key, value in updates.items():
         setattr(camera, key, value)
 
-    camera.updated_at = datetime.now(timezone.utc)
+    camera.updated_at = datetime.now(UTC)
 
     await log_audit(
         db, current_user, "update", "camera",

@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 def _to_camel(s: str) -> str:
@@ -11,11 +11,11 @@ def _to_camel(s: str) -> str:
 class WebhookCreate(BaseModel):
     name: str
     url: str
-    secret: Optional[str] = None
+    secret: str | None = None
     events: list[str] = Field(default_factory=list)
     headers: dict = Field(default_factory=dict)
     is_active: bool = True
-    organization_id: Optional[str] = Field(default=None, validation_alias="organizationId")
+    organization_id: str | None = Field(default=None, validation_alias="organizationId")
 
     model_config = {
         "alias_generator": _to_camel,
@@ -24,13 +24,13 @@ class WebhookCreate(BaseModel):
 
 
 class WebhookUpdate(BaseModel):
-    name: Optional[str] = None
-    url: Optional[str] = None
-    secret: Optional[str] = None
-    events: Optional[list[str]] = None
-    headers: Optional[dict] = None
-    is_active: Optional[bool] = None
-    organization_id: Optional[str] = Field(default=None, validation_alias="organizationId")
+    name: str | None = None
+    url: str | None = None
+    secret: str | None = None
+    events: list[str] | None = None
+    headers: dict | None = None
+    is_active: bool | None = None
+    organization_id: str | None = Field(default=None, validation_alias="organizationId")
 
     model_config = {
         "alias_generator": _to_camel,
@@ -40,16 +40,16 @@ class WebhookUpdate(BaseModel):
 
 class WebhookResponse(BaseModel):
     id: str
-    organization_id: Optional[str] = None
+    organization_id: str | None = None
     name: str
     url: str
     has_secret: bool = False
     events: list[str]
     headers: dict
     is_active: bool
-    last_triggered_at: Optional[datetime] = None
+    last_triggered_at: datetime | None = None
     failure_count: int
-    created_by: Optional[str] = None
+    created_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -65,11 +65,11 @@ class WebhookDeliveryResponse(BaseModel):
     webhook_id: str
     event: str
     status: str
-    status_code: Optional[int] = None
-    request_body: Optional[str] = None
-    response_body: Optional[str] = None
-    duration_ms: Optional[int] = None
-    error_message: Optional[str] = None
+    status_code: int | None = None
+    request_body: str | None = None
+    response_body: str | None = None
+    duration_ms: int | None = None
+    error_message: str | None = None
     created_at: datetime
 
     model_config = {
@@ -81,6 +81,6 @@ class WebhookDeliveryResponse(BaseModel):
 
 class WebhookTestResponse(BaseModel):
     success: bool
-    status_code: Optional[int] = None
-    duration_ms: Optional[int] = None
-    error: Optional[str] = None
+    status_code: int | None = None
+    duration_ms: int | None = None
+    error: str | None = None

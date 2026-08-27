@@ -1,26 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
-from typing import Optional
 
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
 from backend.app.models.incident import Incident
 from backend.app.schemas.incident import (
     IncidentCreate,
-    IncidentUpdate,
-    IncidentResponse,
     IncidentListResponse,
+    IncidentResponse,
+    IncidentUpdate,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["Incidents"])
 
 
 @router.get("", response_model=IncidentListResponse)
 async def list_incidents(
-    status: Optional[str] = Query(None),
-    severity: Optional[str] = Query(None),
-    classroom_id: Optional[str] = Query(None),
+    status: str | None = Query(None),
+    severity: str | None = Query(None),
+    classroom_id: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -45,7 +44,7 @@ async def list_incidents(
     incidents = result.scalars().all()
 
     return IncidentListResponse(
-        data=incidents,
+        data=[IncidentResponse.model_validate(i) for i in incidents],
         total=total,
         page=page,
         page_size=page_size,

@@ -1,10 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String
-from sqlalchemy.orm import Mapped, mapped_column
-
 from backend.app.core.database import Base
+from sqlalchemy import JSON, DateTime, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class ComplianceLog(Base):
@@ -63,7 +62,7 @@ class ComplianceLog(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
         index=True,
     )

@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
-from typing import Optional
 
-from backend.app.api.dependencies import get_db, get_current_user, require_permission
-from backend.app.models.detection_event import DetectionEvent
-from backend.app.models.classroom import Classroom
+from backend.app.api.dependencies import get_db, require_permission
 from backend.app.models.camera import Camera
-from backend.app.schemas.event import DetectionEventResponse, DetectionEventListResponse, DetectionEventCreate
+from backend.app.models.classroom import Classroom
+from backend.app.models.detection_event import DetectionEvent
+from backend.app.schemas.event import (
+    DetectionEventCreate,
+    DetectionEventListResponse,
+    DetectionEventResponse,
+)
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/events", tags=["Events"])
 
@@ -55,10 +58,10 @@ def _enrich_event(event, classroom_name=None, camera_name=None):
 
 @router.get("", response_model=DetectionEventListResponse)
 async def list_events(
-    classroom_id: Optional[str] = Query(None),
-    camera_id: Optional[str] = Query(None),
-    type: Optional[str] = Query(None),
-    severity: Optional[str] = Query(None),
+    classroom_id: str | None = Query(None),
+    camera_id: str | None = Query(None),
+    type: str | None = Query(None),
+    severity: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),

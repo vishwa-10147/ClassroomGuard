@@ -1,10 +1,6 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.app.api.dependencies import get_db, get_current_user, require_permission
+from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
 from backend.app.core.security import hash_password
 from backend.app.models.user import User
@@ -13,7 +9,9 @@ from backend.app.schemas.user import (
     UserResponse,
     UserUpdate,
 )
-
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(
     prefix="/api/v1/users",

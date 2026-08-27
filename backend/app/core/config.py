@@ -6,9 +6,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = True
 
-    database_url: str
+    database_url: str = "postgresql+asyncpg://classroomguard:classroomguard_dev@localhost:5432/classroomguard"
 
-    jwt_secret: str
+    jwt_secret: str = "classroomguard-dev-secret-change-in-prod"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7

@@ -1,10 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String
-from sqlalchemy.orm import Mapped, mapped_column
-
 from backend.app.core.database import Base
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class DetectionEvent(Base):
@@ -76,14 +75,14 @@ class DetectionEvent(Base):
 
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
         index=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 

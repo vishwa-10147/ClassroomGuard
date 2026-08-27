@@ -1,14 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
-
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.dependencies import get_current_user, get_db
 from backend.app.core.audit import log_audit
-from backend.app.core.rate_limit import limiter, LOGIN_RATE_LIMIT
+from backend.app.core.rate_limit import LOGIN_RATE_LIMIT, limiter
 from backend.app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -25,6 +20,10 @@ from backend.app.schemas.auth import (
     TokenResponse,
     UserResponse,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class RegisterRequest(BaseModel):
@@ -196,7 +195,7 @@ async def refresh_token(
             detail="Invalid or revoked refresh token",
         )
 
-    if record.expires_at < datetime.now(timezone.utc):
+    if record.expires_at < datetime.now(UTC):
         record.revoked = True
         await db.commit()
         raise HTTPException(

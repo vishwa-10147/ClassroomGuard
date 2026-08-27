@@ -1,16 +1,13 @@
-import os
-import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, Response
 
 from backend.app.api.dependencies import require_permission
 from backend.app.core.config import settings
 from backend.app.core.sanitization import sanitize_filename
 from backend.app.models.user import User
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, Response
 
 router = APIRouter(prefix="/api/v1/uploads", tags=["Uploads"])
 
@@ -67,7 +64,7 @@ async def upload_video(
         "size_mb": round(written / (1024 * 1024), 2),
         "path": str(dest),
         "content_type": file.content_type,
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_at": datetime.now(UTC).isoformat(),
     }
 
 

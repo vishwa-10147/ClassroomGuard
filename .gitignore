@@ -37,6 +37,9 @@ ai/runs/
 ai/train/runs/
 ai/analysis_results.json
 
+# === Test media ===
+test_data/
+
 # === Storage (runtime data) ===
 storage/evidence/*
 storage/frames/*

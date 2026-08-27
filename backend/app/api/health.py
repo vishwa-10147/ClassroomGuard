@@ -1,12 +1,11 @@
-import time
 import logging
+import time
 from typing import Any
-
-from fastapi import APIRouter
-from sqlalchemy import text
 
 from backend.app.core.database import engine
 from backend.app.core.redis import redis_health_check
+from fastapi import APIRouter
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/health", tags=["health"])

@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Depends
-
 from backend.app.api.dependencies import get_current_user, require_roles
 from backend.app.models.user import User
-
+from fastapi import APIRouter, Depends
 
 router = APIRouter(
     prefix="/api/v1/rbac-test",

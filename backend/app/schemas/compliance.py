@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 def _to_camel(s: str) -> str:
@@ -9,7 +9,7 @@ def _to_camel(s: str) -> str:
 
 
 class DataRequestCreate(BaseModel):
-    user_id: Optional[str] = Field(default=None, validation_alias="userId")
+    user_id: str | None = Field(default=None, validation_alias="userId")
     request_type: str = Field(default="export", validation_alias="requestType")
 
     model_config = {
@@ -42,8 +42,8 @@ class ConsentResponse(BaseModel):
     user_id: str
     consent_type: str
     granted: bool
-    granted_at: Optional[datetime] = None
-    revoked_at: Optional[datetime] = None
+    granted_at: datetime | None = None
+    revoked_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -51,12 +51,12 @@ class ConsentResponse(BaseModel):
 
 class RetentionPolicyResponse(BaseModel):
     id: str
-    organization_id: Optional[str] = None
+    organization_id: str | None = None
     resource_type: str
     retention_days: int
     auto_delete: bool
     archive_before_delete: bool
-    archive_location: Optional[str] = None
+    archive_location: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -65,10 +65,10 @@ class RetentionPolicyResponse(BaseModel):
 
 
 class RetentionPolicyUpdate(BaseModel):
-    retention_days: Optional[int] = Field(default=None, validation_alias="retentionDays")
-    auto_delete: Optional[bool] = Field(default=None, validation_alias="autoDelete")
-    archive_before_delete: Optional[bool] = Field(default=None, validation_alias="archiveBeforeDelete")
-    archive_location: Optional[str] = Field(default=None, validation_alias="archiveLocation")
+    retention_days: int | None = Field(default=None, validation_alias="retentionDays")
+    auto_delete: bool | None = Field(default=None, validation_alias="autoDelete")
+    archive_before_delete: bool | None = Field(default=None, validation_alias="archiveBeforeDelete")
+    archive_location: str | None = Field(default=None, validation_alias="archiveLocation")
 
     model_config = {
         "alias_generator": _to_camel,
@@ -78,21 +78,21 @@ class RetentionPolicyUpdate(BaseModel):
 
 class ComplianceLogResponse(BaseModel):
     id: str
-    organization_id: Optional[str] = None
+    organization_id: str | None = None
     event_type: str
-    user_id: Optional[str] = None
-    resource_type: Optional[str] = None
-    resource_id: Optional[str] = None
-    details: Optional[dict] = None
-    ip_address: Optional[str] = None
-    legal_basis: Optional[str] = None
+    user_id: str | None = None
+    resource_type: str | None = None
+    resource_id: str | None = None
+    details: dict | None = None
+    ip_address: str | None = None
+    legal_basis: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 class DataSummaryResponse(BaseModel):
-    organization_id: Optional[str] = None
+    organization_id: str | None = None
     evidence_count: int = 0
     recordings_count: int = 0
     alerts_count: int = 0

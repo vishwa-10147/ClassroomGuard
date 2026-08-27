@@ -1,9 +1,8 @@
+from backend.app.core.security import decode_access_token
+from backend.app.core.tenant import current_org_id
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
-
-from backend.app.core.security import decode_access_token
-from backend.app.core.tenant import current_org_id
 
 
 class TenantMiddleware(BaseHTTPMiddleware):

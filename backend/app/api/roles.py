@@ -1,9 +1,5 @@
 import json
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import UTC, datetime
 
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
@@ -14,6 +10,9 @@ from backend.app.schemas.role import (
     RoleResponse,
     RoleUpdate,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/roles", tags=["Roles"])
 
@@ -195,7 +194,7 @@ async def update_role(
     for key, value in updates.items():
         setattr(role, key, value)
 
-    role.updated_at = datetime.now(timezone.utc)
+    role.updated_at = datetime.now(UTC)
     await log_audit(
         db, _user, "update", "role",
         resource_id=role_id,

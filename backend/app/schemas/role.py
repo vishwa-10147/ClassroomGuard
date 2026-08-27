@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,9 +10,9 @@ class RoleCreate(BaseModel):
 
 
 class RoleUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=50)
-    description: Optional[str] = None
-    permissions: Optional[list[str]] = None
+    name: str | None = Field(default=None, min_length=1, max_length=50)
+    description: str | None = None
+    permissions: list[str] | None = None
 
 
 class RoleResponse(BaseModel):

@@ -1,18 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.app.api.dependencies import get_db, get_current_user, require_permission
+from backend.app.api.dependencies import get_db, require_permission
 from backend.app.models.webhook import Webhook
 from backend.app.models.webhook_delivery import WebhookDelivery
 from backend.app.schemas.webhook import (
     WebhookCreate,
-    WebhookUpdate,
-    WebhookResponse,
     WebhookDeliveryResponse,
+    WebhookResponse,
     WebhookTestResponse,
+    WebhookUpdate,
 )
 from backend.app.services.webhook_service import test_webhook_delivery
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhooks"])
 

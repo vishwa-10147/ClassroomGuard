@@ -6,10 +6,9 @@ import hmac
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
-
 from backend.app.models.webhook import Webhook
 
 logger = logging.getLogger(__name__)
@@ -27,7 +26,7 @@ async def deliver_webhook(
     body = json.dumps({
         "event": event,
         "data": payload,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     })
 
     headers = {"Content-Type": "application/json", **(webhook.headers or {})}
@@ -86,7 +85,7 @@ async def test_webhook_delivery(
     body = json.dumps({
         "event": "test.ping",
         "data": {"message": "Webhook test from ClassroomGuard"},
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     })
 
     final_headers = {"Content-Type": "application/json", **(headers or {})}

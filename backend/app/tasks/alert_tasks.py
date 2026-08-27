@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from backend.app.core.celery import celery_app
 
@@ -21,11 +20,11 @@ def _run_async(coro):
 
 
 async def _process_alert_inner(alert_id: str) -> None:
-    from sqlalchemy import select
     from backend.app.core.database import AsyncSessionLocal
+    from backend.app.core.websocket import manager
     from backend.app.models.alert import Alert
     from backend.app.models.push_token import PushToken
-    from backend.app.core.websocket import manager
+    from sqlalchemy import select
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Alert).where(Alert.id == alert_id))
@@ -37,7 +36,7 @@ async def _process_alert_inner(alert_id: str) -> None:
         # Send push notifications
         try:
             tokens_result = await db.execute(
-                select(PushToken.token).where(PushToken.is_active == True)
+                select(PushToken.token).where(PushToken.is_active)
             )
             tokens = [row[0] for row in tokens_result.all()]
             if tokens:
@@ -89,14 +88,14 @@ def process_alert(self, alert_id: str) -> dict:
 def cleanup_old_evidence(self, days: int = 30) -> dict:
     """Delete evidence files older than *days* days."""
     storage = os.environ.get("STORAGE_PATH", "./storage")
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     removed = 0
 
     for root, _dirs, files in os.walk(storage):
         for fname in files:
             fpath = os.path.join(root, fname)
             try:
-                mtime = datetime.fromtimestamp(os.path.getmtime(fpath), tz=timezone.utc)
+                mtime = datetime.fromtimestamp(os.path.getmtime(fpath), tz=UTC)
                 if mtime < cutoff:
                     os.remove(fpath)
                     removed += 1
@@ -117,7 +116,7 @@ def generate_report(self, report_type: str = "summary", params: dict | None = No
         "status": "completed",
         "report_type": report_type,
         "params": params,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -132,5 +131,5 @@ def batch_process_video(self, video_path: str, camera_id: str) -> dict:
         "status": "completed",
         "video_path": video_path,
         "camera_id": camera_id,
-        "processed_at": datetime.now(timezone.utc).isoformat(),
+        "processed_at": datetime.now(UTC).isoformat(),
     }

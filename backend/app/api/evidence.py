@@ -1,13 +1,11 @@
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
 
 from backend.app.api.dependencies import require_permission
 from backend.app.core.config import settings
 from backend.app.models.user import User
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/api/v1/evidence", tags=["Evidence"])
 
@@ -40,7 +38,7 @@ def _scan_directory(directory: Path, source: str) -> list[dict]:
             "filename": file_path.name,
             "url": f"/api/v1/evidence/frames/{file_path.name}",
             "size": stat.st_size,
-            "created_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            "created_at": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
             "source": source,
         })
     return items

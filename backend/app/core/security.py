@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
-
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from datetime import UTC, datetime, timedelta
 
 from backend.app.core.config import settings
-
+from jose import jwt
+from passlib.context import CryptContext
 
 pwd_context = CryptContext(
     schemes=["bcrypt"],
@@ -25,7 +23,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def create_access_token(user_id: str, role: str, organization_id: str | None = None) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(
+    expire = datetime.now(UTC) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
 
@@ -58,7 +56,7 @@ def create_refresh_token(user_id: str) -> tuple[str, str, datetime]:
     """Create a refresh token. Returns (raw_token, token_hash, expires_at)."""
     raw_token = secrets.token_urlsafe(64)
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    expires_at = datetime.now(UTC) + timedelta(days=7)
     return raw_token, token_hash, expires_at
 
 

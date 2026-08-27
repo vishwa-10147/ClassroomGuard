@@ -1,21 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
-from typing import Optional
 
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
 from backend.app.models.recording import Recording
-from backend.app.schemas.recording import RecordingResponse, RecordingListResponse
+from backend.app.schemas.recording import RecordingListResponse, RecordingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/recordings", tags=["Recordings"])
 
 
 @router.get("", response_model=RecordingListResponse)
 async def list_recordings(
-    classroom_id: Optional[str] = Query(None),
-    camera_id: Optional[str] = Query(None),
-    processing_state: Optional[str] = Query(None),
+    classroom_id: str | None = Query(None),
+    camera_id: str | None = Query(None),
+    processing_state: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -40,7 +39,7 @@ async def list_recordings(
     recordings = result.scalars().all()
 
     return RecordingListResponse(
-        data=recordings,
+        data=[RecordingResponse.model_validate(r) for r in recordings],
         total=total,
         page=page,
         page_size=page_size,

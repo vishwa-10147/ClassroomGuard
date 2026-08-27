@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
-
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import UTC, datetime
 
 from backend.app.models.alert import Alert
 from backend.app.models.audit_log import AuditLog
 from backend.app.models.compliance_log import ComplianceLog
 from backend.app.models.consent import UserConsent
 from backend.app.models.recording import Recording
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +47,7 @@ async def get_educational_record(
 
     return {
         "user_id": user_id,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "alerts": [
             {
                 "id": a.id,

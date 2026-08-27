@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 from backend.app.core.celery import celery_app
 
@@ -18,10 +17,10 @@ def _run_async(coro):
 
 
 async def _enforce_retention_inner() -> dict:
-    from sqlalchemy import select
     from backend.app.core.database import AsyncSessionLocal
     from backend.app.models.retention_policy import RetentionPolicy
     from backend.app.services.retention_service import delete_expired
+    from sqlalchemy import select
 
     results = {}
 
@@ -31,7 +30,7 @@ async def _enforce_retention_inner() -> dict:
         )
         policies = result.scalars().all()
 
-        org_ids = set()
+        org_ids: set[str | None] = set()
         for p in policies:
             if p.organization_id:
                 org_ids.add(p.organization_id)

@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select, func, and_, delete
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.app.api.dependencies import get_db, get_current_user, require_permission
-from backend.app.core.audit import log_audit, get_client_ip
+from backend.app.api.dependencies import get_current_user, get_db, require_permission
+from backend.app.core.audit import get_client_ip, log_audit
 from backend.app.models.alert import Alert
 from backend.app.models.audit_log import AuditLog
 from backend.app.models.compliance_log import ComplianceLog
@@ -19,9 +14,9 @@ from backend.app.models.recording import Recording
 from backend.app.models.retention_policy import RetentionPolicy
 from backend.app.models.user import User
 from backend.app.schemas.compliance import (
+    ComplianceLogResponse,
     ConsentCreate,
     ConsentResponse,
-    ComplianceLogResponse,
     DataRequestCreate,
     DataRequestResponse,
     DataSummaryResponse,
@@ -29,7 +24,14 @@ from backend.app.schemas.compliance import (
     RetentionPolicyUpdate,
     UserErasureResponse,
 )
-from backend.app.services.retention_service import get_policies, check_expired_resources, delete_expired
+from backend.app.services.retention_service import (
+    check_expired_resources,
+    delete_expired,
+    get_policies,
+)
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +111,8 @@ async def record_consent(
         user_id=current_user.id,
         consent_type=body.consent_type,
         granted=body.granted,
-        granted_at=datetime.now(timezone.utc) if body.granted else None,
-        revoked_at=datetime.now(timezone.utc) if not body.granted else None,
+        granted_at=datetime.now(UTC) if body.granted else None,
+        revoked_at=datetime.now(UTC) if not body.granted else None,
         ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
@@ -135,8 +137,8 @@ async def record_consent(
 
 @router.get("/consent", response_model=list[ConsentResponse])
 async def list_consents(
-    user_id: Optional[str] = Query(None, alias="userId"),
-    consent_type: Optional[str] = Query(None, alias="consentType"),
+    user_id: str | None = Query(None, alias="userId"),
+    consent_type: str | None = Query(None, alias="consentType"),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_permission("audit_logs:read")),
 ):
@@ -171,7 +173,7 @@ async def erase_user_data(
     await db.execute(delete(UserConsent).where(UserConsent.user_id == user_id))
 
     await db.execute(
-        AuditLog.__table__.update()
+        update(AuditLog)
         .where(AuditLog.user_id == user_id)
         .values(user_id="anonymized", user_name="anonymized")
     )
@@ -195,8 +197,8 @@ async def erase_user_data(
 
 @router.get("/audit-trail", response_model=list[ComplianceLogResponse])
 async def get_audit_trail(
-    event_type: Optional[str] = Query(None, alias="eventType"),
-    user_id: Optional[str] = Query(None, alias="userId"),
+    event_type: str | None = Query(None, alias="eventType"),
+    user_id: str | None = Query(None, alias="userId"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),

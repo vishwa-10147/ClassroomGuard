@@ -1,18 +1,15 @@
 import asyncio
-from uuid import uuid4
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
-
-from backend.app.core.database import init_db, AsyncSessionLocal
-from backend.app.models.user import User
-from backend.app.models.classroom import Classroom
-from backend.app.models.camera import Camera
-from backend.app.models.detection_event import DetectionEvent
+from backend.app.core.database import AsyncSessionLocal, init_db
 from backend.app.models.alert import Alert
+from backend.app.models.camera import Camera
+from backend.app.models.classroom import Classroom
+from backend.app.models.detection_event import DetectionEvent
 from backend.app.models.incident import Incident
 from backend.app.models.recording import Recording
-
+from backend.app.models.user import User
+from sqlalchemy import select
 
 CLASSROOMS = [
     {
@@ -84,7 +81,7 @@ RECORDINGS = [
 async def seed_data():
     await init_db()
     async with AsyncSessionLocal() as db:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Check if data already exists
         existing = await db.execute(select(Classroom).limit(1))
@@ -95,7 +92,6 @@ async def seed_data():
         # Get user IDs for foreign keys
         users_result = await db.execute(select(User))
         users = {u.role: u.id for u in users_result.scalars().all()}
-        super_admin_id = users.get("super_admin", "unknown")
         security_id = users.get("security", "unknown")
 
         # Create classrooms
@@ -207,7 +203,7 @@ async def seed_data():
         print(f"  [created] {len(RECORDINGS)} recordings")
 
         await db.commit()
-        print(f"\nDone. Seed data created successfully.")
+        print("\nDone. Seed data created successfully.")
 
 
 if __name__ == "__main__":

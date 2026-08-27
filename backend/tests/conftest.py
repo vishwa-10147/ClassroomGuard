@@ -1,12 +1,6 @@
-import asyncio
-from uuid import uuid4
 
-import pytest
-import pytest_asyncio
 import httpx
-
-from backend.app.core.security import create_access_token, hash_password
-
+import pytest_asyncio
 
 BASE_URL = "http://localhost:8000"
 

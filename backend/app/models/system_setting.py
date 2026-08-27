@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
-
-from sqlalchemy import DateTime, String
-from sqlalchemy.orm import Mapped, mapped_column
+from datetime import UTC, datetime
 
 from backend.app.core.database import Base
+from sqlalchemy import DateTime, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class SystemSetting(Base):
@@ -28,7 +27,7 @@ class SystemSetting(Base):
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )

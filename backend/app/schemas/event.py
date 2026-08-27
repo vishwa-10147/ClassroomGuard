@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Any
 from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 def _to_camel(s: str) -> str:
@@ -12,18 +13,18 @@ class DetectionEventResponse(BaseModel):
     id: str
     type: str = Field(validation_alias="event_type")
     severity: str
-    classroom_id: Optional[str] = None
-    classroom_name: Optional[str] = None
-    camera_id: Optional[str] = None
-    camera_name: Optional[str] = None
-    seat_id: Optional[str] = None
-    confidence: Optional[float] = None
-    tracker_id: Optional[int] = None
-    frame_url: Optional[str] = None
-    bounding_box: Optional[Any] = None
-    metadata: Optional[Any] = Field(default=None, validation_alias="metadata_json")
+    classroom_id: str | None = None
+    classroom_name: str | None = None
+    camera_id: str | None = None
+    camera_name: str | None = None
+    seat_id: str | None = None
+    confidence: float | None = None
+    tracker_id: int | None = None
+    frame_url: str | None = None
+    bounding_box: Any | None = None
+    metadata: Any | None = Field(default=None, validation_alias="metadata_json")
     timestamp: datetime
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
 
     model_config = {
         "from_attributes": True,
@@ -37,11 +38,11 @@ class DetectionEventCreate(BaseModel):
     severity: str
     classroom_id: str = Field(validation_alias="classroomId")
     camera_id: str = Field(validation_alias="cameraId")
-    seat_id: Optional[str] = Field(default=None, validation_alias="seatId")
-    confidence: Optional[float] = None
-    tracker_id: Optional[int] = Field(default=None, validation_alias="trackerId")
-    bounding_box: Optional[Any] = Field(default=None, validation_alias="boundingBox")
-    metadata: Optional[Any] = None
+    seat_id: str | None = Field(default=None, validation_alias="seatId")
+    confidence: float | None = None
+    tracker_id: int | None = Field(default=None, validation_alias="trackerId")
+    bounding_box: Any | None = Field(default=None, validation_alias="boundingBox")
+    metadata: Any | None = None
 
     model_config = {
         "alias_generator": _to_camel,
