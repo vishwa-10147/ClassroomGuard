@@ -150,11 +150,11 @@ def analyze_video(video_path, detector, pose_model, tracker, gaze_estimator, fp_
         # Detection with false-positive filtering
         results_det = detector.predict(
             source=frame, conf=CONF_DET, iou=0.45,
-            imgsz=IMG_SIZE, device=DEVICE, quantize="fp16", verbose=False,
+            imgsz=IMG_SIZE, device=DEVICE, half=True, verbose=False,
         )
         results_pose = pose_model.predict(
             source=frame, conf=CONF_POSE,
-            imgsz=IMG_SIZE, device=DEVICE, quantize="fp16", verbose=False,
+            imgsz=IMG_SIZE, device=DEVICE, half=True, verbose=False,
         )
 
         persons = []

@@ -56,7 +56,7 @@ class PoseAnalyzer:
             conf=self.config["confidence"],
             imgsz=self.config["input_size"],
             device=self.config["device"],
-            quantize=self.config.get("half", True),
+            half=self.config.get("half", True),
             verbose=False,
         )
 

@@ -23,23 +23,30 @@ logger = logging.getLogger("train")
 
 DATASET_YAML = """\
 # Classroom Guard - Custom Dataset
-# Classes: person, cell_phone, calculator, cheat_sheet, earbuds
+# Classes: person, cell_phone, calculator, cheat_sheet, earbuds, high_attention, low_attention
 
 path: ../data
 train: images/train
 val: images/val
 
-nc: 5
+nc: 7
 names:
   0: person
   1: cell_phone
   2: calculator
   3: cheat_sheet
   4: earbuds
+  5: high_attention
+  6: low_attention
 """
 
-
 def create_dataset_yaml(data_dir: str = "../data"):
+    # If the user ran merge_datasets.py, use that data.yaml instead of overwriting!
+    merged_yaml = Path(data_dir) / "data.yaml"
+    if merged_yaml.exists():
+        logger.info("Using existing merged data.yaml from %s", merged_yaml)
+        return str(merged_yaml)
+        
     yaml_path = Path(data_dir) / "dataset.yaml"
     yaml_path.write_text(DATASET_YAML)
     logger.info("Dataset YAML created: %s", yaml_path)

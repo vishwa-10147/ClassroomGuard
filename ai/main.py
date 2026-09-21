@@ -17,6 +17,11 @@ from src.pose_analyzer import PoseAnalyzer
 from src.tracker import ByteTracker, Track
 from src.alert_system import AlertSystem
 from src.dashboard_server import DashboardServer
+from pathlib import Path
+
+# Ensure logs directory exists before configuring file handlers
+Path("logs").mkdir(exist_ok=True)
+Path("logs/snapshots").mkdir(exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -249,6 +254,7 @@ def main():
     parser.add_argument("--no-display", action="store_true", help="Run headless (no OpenCV window)")
     parser.add_argument("--export-trt", action="store_true", help="Export models to TensorRT and exit")
     parser.add_argument("--camera", type=int, default=None, help="Override: run single camera by index")
+    parser.add_argument("--video-dir", type=str, default=None, help="Directory containing videos to process simultaneously")
     args = parser.parse_args()
 
     # Ensure logs dir exists
@@ -263,6 +269,25 @@ def main():
         if not config["cameras"]:
             config["cameras"] = [{"id": args.camera, "name": f"Camera {args.camera}", "source": args.camera,
                                   "resolution": [1920, 1080], "fps": 30}]
+                                  
+    # Load all videos from a directory if specified
+    if hasattr(args, 'video_dir') and args.video_dir:
+        video_dir = Path(args.video_dir)
+        if video_dir.exists():
+            video_files = list(video_dir.glob("*.mp4")) + list(video_dir.glob("*.avi")) + list(video_dir.glob("*.mkv"))
+            if video_files:
+                config["cameras"] = []
+                for i, v_file in enumerate(video_files):
+                    config["cameras"].append({
+                        "id": i,
+                        "name": f"Video {i+1} ({v_file.name})",
+                        "source": str(v_file.resolve()),
+                        "resolution": [1920, 1080],
+                        "fps": 30
+                    })
+                logger.info("Loaded %d videos from %s", len(video_files), args.video_dir)
+            else:
+                logger.warning("No videos found in %s", args.video_dir)
 
     if args.export_trt:
         logger.info("Exporting models to TensorRT...")

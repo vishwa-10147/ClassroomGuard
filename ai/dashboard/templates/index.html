@@ -46,6 +46,12 @@
     <div class="header">
         <h1>Classroom Guard</h1>
         <div class="status">
+            <select id="gridLayout" style="background: #1a1a28; color: #00d4ff; border: 1px solid #333; padding: 4px 8px; border-radius: 4px; margin-right: 16px;">
+                <option value="1">1 Column</option>
+                <option value="2" selected>2 Columns</option>
+                <option value="3">3 Columns</option>
+                <option value="4">4 Columns</option>
+            </select>
             <span><span class="status-dot green" id="statusDot"></span> <span id="statusText">Connected</span></span>
             <span id="camCount">Cameras: 0</span>
             <span id="uptime">Uptime: 00:00:00</span>
@@ -53,7 +59,7 @@
     </div>
     <div class="main">
         <div>
-            <div class="cameras" id="cameraGrid"></div>
+            <div class="cameras" id="cameraGrid" style="grid-template-columns: repeat(2, 1fr);"></div>
         </div>
         <div class="sidebar">
             <div class="panel">
@@ -79,24 +85,14 @@
         const startTime = Date.now();
         let alertCount = 0;
 
-        // Initialize camera feeds
-        const cameras = [0, 1];
+        // Camera feeds will be initialized dynamically when stats arrive
         const grid = document.getElementById('cameraGrid');
-        cameras.forEach(id => {
-            const card = document.createElement('div');
-            card.className = 'cam-card';
-            card.innerHTML = `
-                <div class="cam-header">
-                    <span>Camera ${id + 1}</span>
-                    <span class="fps-badge" id="fps-${id}">0 FPS</span>
-                </div>
-                <img src="/video/${id}" alt="Camera ${id}" onerror="this.style.display='none'">
-            `;
-            grid.appendChild(card);
-        });
-        document.getElementById('camCount').textContent = `Cameras: ${cameras.length}`;
 
         // Socket events
+        document.getElementById('gridLayout').addEventListener('change', function(e) {
+            document.getElementById('cameraGrid').style.gridTemplateColumns = `repeat(${e.target.value}, 1fr)`;
+        });
+
         socket.on('connect', () => {
             document.getElementById('statusDot').className = 'status-dot green';
             document.getElementById('statusText').textContent = 'Connected';
@@ -131,7 +127,28 @@
             if (stats.total_students !== undefined) document.getElementById('totalStudents').textContent = stats.total_students;
             if (stats.avg_fps !== undefined) document.getElementById('avgFps').textContent = stats.avg_fps.toFixed(0);
             if (stats.fps) {
+                // Dynamically create camera cards if they don't exist
+                const grid = document.getElementById('cameraGrid');
+                const existingCameras = Array.from(grid.children).map(c => c.dataset.camId);
+                
                 Object.entries(stats.fps).forEach(([camId, fps]) => {
+                    if (!existingCameras.includes(camId)) {
+                        const card = document.createElement('div');
+                        card.className = 'cam-card';
+                        card.dataset.camId = camId;
+                        card.innerHTML = `
+                            <div class="cam-header">
+                                <span>Camera ${parseInt(camId) + 1}</span>
+                                <span class="fps-badge" id="fps-${camId}">0 FPS</span>
+                            </div>
+                            <img src="/video/${camId}" alt="Camera ${camId}" onerror="this.style.display='none'">
+                        `;
+                        grid.appendChild(card);
+                        
+                        // Update camera count
+                        document.getElementById('camCount').textContent = `Cameras: ${grid.children.length}`;
+                    }
+                    
                     const el = document.getElementById(`fps-${camId}`);
                     if (el) el.textContent = `${fps.toFixed(0)} FPS`;
                 });

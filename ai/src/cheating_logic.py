@@ -36,7 +36,7 @@ class CheatingEngine:
 
         # --- Phone detection ---
         if self.rules.get("phone_usage", {}).get("enabled", True):
-            phone_dets = [d for d in object_detections if d["class_name"] == "cell_phone"]
+            phone_dets = [d for d in object_detections if d["class_name"] in ("cell_phone", "cell phone")]
             if phone_dets:
                 phone_bbox = phone_dets[0]["bbox"]
                 if self._is_near_person(track.bbox, phone_bbox, self.rules["phone_usage"].get("proximity_to_person", 150)):
@@ -150,3 +150,12 @@ class CheatingEngine:
 
     def get_student_state(self, track_id: int) -> dict:
         return self._student_state.get(track_id, {})
+
+    def _is_near_person(self, person_bbox: list, object_bbox: list, threshold: int) -> bool:
+        px1, py1, px2, py2 = person_bbox
+        ox1, oy1, ox2, oy2 = object_bbox
+        
+        # Expand the person bounding box by the threshold
+        # If the object bounding box overlaps with this expanded box, they are "near"
+        return (ox1 < px2 + threshold and ox2 > px1 - threshold and
+                oy1 < py2 + threshold and oy2 > py1 - threshold)

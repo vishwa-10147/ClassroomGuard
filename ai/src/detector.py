@@ -46,7 +46,7 @@ class YOLODetector:
             iou=self.config["iou_threshold"],
             imgsz=self.config["input_size"],
             device=self.config["device"],
-            quantize=self.config.get("half", True),
+            half=self.config.get("half", True),
             verbose=False,
         )
 
@@ -88,9 +88,12 @@ class YOLODetector:
         colors = {
             "person": (0, 255, 0),
             "cell_phone": (0, 0, 255),
+            "cell phone": (0, 0, 255),
             "calculator": (255, 165, 0),
             "cheat_sheet": (255, 0, 255),
             "earbuds": (0, 255, 255),
+            "high_attention": (0, 255, 0), # Green
+            "low_attention": (255, 0, 0),  # Blue/Red
         }
         for det in detections:
             x1, y1, x2, y2 = det["bbox"]
