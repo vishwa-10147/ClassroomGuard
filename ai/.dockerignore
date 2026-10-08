@@ -1,0 +1,13 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+logs/
+storage/
+runs/
+sample_videos/
+weights/
+*.pt
+*.engine
+*.onnx

@@ -30,6 +30,10 @@ __pycache__
 .pytest_cache
 .coverage*
 
+# === Mobile App & Non-web Assets ===
+mobile/
+scratch_ts/
+
 # === Environment & Secrets ===
 .env
 .env.*
@@ -74,3 +78,4 @@ task1.py
 task2.py
 task3.py
 backups/
+

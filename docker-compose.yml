@@ -1,28 +1,33 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-classroomguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-classroomguard}
+      POSTGRES_DB: ${POSTGRES_DB:-classroomguard}
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - classguard-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U classroomguard -d classroomguard"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-classroomguard} -d ${POSTGRES_DB:-classroomguard}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     networks:
@@ -34,11 +39,17 @@ services:
       retries: 5
       start_period: 5s
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
+    image: classroomguard-backend:latest
     ports:
       - "8000:8000"
     depends_on:
@@ -47,16 +58,16 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://classroomguard:classroomguard@postgres:5432/classroomguard}
+      JWT_SECRET: ${JWT_SECRET:-changeme_in_production_jwt_secret_32_bytes_min}
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: "60"
       API_HOST: "0.0.0.0"
       API_PORT: "8000"
-      FRONTEND_URL: http://localhost:3000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       STORAGE_PATH: ./storage
-      APP_ENV: development
-      DEBUG: "true"
+      APP_ENV: ${APP_ENV:-production}
+      DEBUG: ${DEBUG:-false}
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
     volumes:
@@ -64,25 +75,30 @@ services:
     networks:
       - classguard-net
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   celery-worker:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    command: celery -A app.core.celery worker --loglevel=info --concurrency=4
+    image: classroomguard-backend:latest
+    command: celery -A backend.app.core.celery worker --loglevel=info --concurrency=4
     depends_on:
+      backend:
+        condition: service_started
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://classroomguard:classroomguard@postgres:5432/classroomguard}
+      JWT_SECRET: ${JWT_SECRET:-changeme_in_production_jwt_secret_32_bytes_min}
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: "60"
       STORAGE_PATH: ./storage
-      APP_ENV: development
-      DEBUG: "true"
+      APP_ENV: ${APP_ENV:-production}
+      DEBUG: ${DEBUG:-false}
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
     volumes:
@@ -90,11 +106,17 @@ services:
     networks:
       - classguard-net
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   ai:
     build:
-      context: .
-      dockerfile: ai/Dockerfile
+      context: ./ai
+      dockerfile: Dockerfile
+    image: classroomguard-ai:latest
     depends_on:
       backend:
         condition: service_started
@@ -116,11 +138,17 @@ services:
               count: all
               capabilities: [gpu]
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile
+    image: classroomguard-frontend:latest
     ports:
       - "3000:80"
     depends_on:
@@ -128,11 +156,16 @@ services:
     networks:
       - classguard-net
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -142,23 +175,33 @@ services:
     networks:
       - classguard-net
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     networks:
       - classguard-net
     depends_on:
       - prometheus
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
 volumes:
   pgdata:
@@ -169,3 +212,4 @@ volumes:
 networks:
   classguard-net:
     driver: bridge
+
