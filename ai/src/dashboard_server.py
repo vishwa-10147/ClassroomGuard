@@ -65,6 +65,27 @@ class DashboardServer:
                     "stats": self._stats,
                 })
 
+        @self.app.route("/api/process_video", methods=["POST"])
+        def process_video():
+            from flask import request
+            import subprocess
+            data = request.json
+            video_path = data.get("video_path")
+            if not video_path:
+                return jsonify({"error": "video_path is required"}), 400
+            
+            # Run analyze_videos.py or similar script
+            # analyze_videos.py is currently hardcoded for TEST_VIDEOS.
+            # We can run a newly created process_single_video.py
+            def run_subprocess():
+                try:
+                    subprocess.run(["python", "process_single_video.py", video_path, data.get("camera_id", "")], check=True)
+                except Exception as e:
+                    logger.error(f"Error processing video: {e}")
+            
+            threading.Thread(target=run_subprocess, daemon=True).start()
+            return jsonify({"status": "processing_started", "video_path": video_path})
+
     def _generate_stream(self, camera_id: int):
         while self._running:
             with self._lock:
@@ -111,7 +132,7 @@ class DashboardServer:
         thread = threading.Thread(
             target=lambda: self.socketio.run(
                 self.app, host=self.host, port=self.port,
-                debug=False, use_reloader=False,
+                debug=False, use_reloader=False, allow_unsafe_werkzeug=True,
             ),
             daemon=True,
         )

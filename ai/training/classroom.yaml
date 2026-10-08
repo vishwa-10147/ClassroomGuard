@@ -1,15 +1,13 @@
 # ClassroomGuard Dataset Configuration
-# Fine-tune YOLOv8 on custom classroom data
+# Used as fallback if merged dataset (ai/data/merged_classroom/merged.yaml) is not generated yet.
+# Run:  python scripts/merge_datasets.py  to generate the full merged dataset.
 
-path: dataset_structure   # root relative to this file
+path: dataset_structure
 train: images/train
 val: images/val
 test: images/test
 
-# Number of classes
 nc: 5
-
-# Class names
 names:
   0: person
   1: cell_phone

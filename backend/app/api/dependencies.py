@@ -6,7 +6,7 @@ from backend.app.core.database import AsyncSessionLocal
 from backend.app.core.security import decode_access_token
 from backend.app.core.tenant import current_org_id
 from backend.app.models.user import User
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,10 +20,17 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    if credentials is None:
+    token = None
+    if credentials:
+        token = credentials.credentials
+    elif "token" in request.query_params:
+        token = request.query_params["token"]
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -31,7 +38,7 @@ async def get_current_user(
         )
 
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(token)
         user_id = payload.get("sub")
         token_type = payload.get("type")
         if token_type and token_type != "access":

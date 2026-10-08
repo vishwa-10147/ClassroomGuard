@@ -5,6 +5,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import requests
+import jwt
 
 import cv2
 import numpy as np
@@ -20,6 +22,10 @@ class AlertSystem:
         self.log_dir = Path(alert_cfg.get("log_dir", "logs"))
         self.save_snapshots = alert_cfg.get("save_snapshots", True)
         self.snapshot_dir = Path(alert_cfg.get("snapshot_dir", "logs/snapshots"))
+        self.backend_url = "http://backend:8000/api/v1/events"
+        self.jwt_secret = os.environ.get("JWT_SECRET", "classroomguard-development-secret-change-in-production")
+
+
 
         # Storage directories
         self.evidence_dir = Path("storage/evidence")
@@ -69,6 +75,9 @@ class AlertSystem:
             except Exception as e:
                 logger.error("Alert callback error: %s", e)
 
+        # Push to backend REST API
+        self._push_to_backend(alert)
+
         # Console output
         severity_colors = {"HIGH": "\033[91m", "MEDIUM": "\033[93m", "LOW": "\033[94m"}
         color = severity_colors.get(alert["severity"], "\033[0m")
@@ -78,6 +87,36 @@ class AlertSystem:
             color, alert["severity"], alert["track_id"], alert["camera_id"],
             alert["alert_type"], alert["message"], reset,
         )
+
+    def _push_to_backend(self, alert: dict):
+        try:
+            cam_map = {0: "cam-001", 1: "cam-002", 2: "cam-003", 3: "cam-004", 4: "cam-005"}
+            cls_map = {0: "cls-001", 1: "cls-001", 2: "cls-002", 3: "cls-002", 4: "cls-003"}
+            cid = alert.get("camera_id", 0)
+            
+            payload = {
+                "eventType": str(alert.get("alert_type")).upper().replace(" ", "_"),
+                "severity": str(alert.get("severity", "MEDIUM")).lower(),
+                "classroomId": cls_map.get(cid, "cls-001"),
+                "cameraId": cam_map.get(cid, "cam-001"),
+                "trackerId": alert.get("track_id"),
+                "confidence": alert.get("confidence", 0.9),
+                "metadata": {"message": alert.get("message"), "evidence_path": alert.get("evidence_path")}
+            }
+            
+            # Generate admin token
+            token = jwt.encode(
+                {"sub": "system", "role": "admin", "exp": datetime.now().timestamp() + 300},
+                self.jwt_secret,
+                algorithm="HS256"
+            )
+            headers = {"Authorization": f"Bearer {token}"}
+            
+            resp = requests.post(self.backend_url, json=payload, headers=headers, timeout=5)
+            if resp.status_code not in (200, 201):
+                logger.error("Failed to push alert to backend: %s %s", resp.status_code, resp.text)
+        except Exception as e:
+            logger.error("Exception pushing alert to backend: %s", e)
 
     def _write_log(self, alert: dict):
         try:

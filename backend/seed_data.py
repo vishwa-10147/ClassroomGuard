@@ -39,11 +39,11 @@ CLASSROOMS = [
 ]
 
 CAMERAS = [
-    {"id": "cam-001", "name": "Front Left", "camera_id": "CAM-FRONT-L", "classroom_id": "cls-001", "status": "online", "fps": 30, "resolution": "1920x1080", "ai_processing": True, "ai_model": "yolov8m"},
-    {"id": "cam-002", "name": "Front Right", "camera_id": "CAM-FRONT-R", "classroom_id": "cls-001", "status": "online", "fps": 30, "resolution": "1920x1080", "ai_processing": True, "ai_model": "yolov8m"},
-    {"id": "cam-003", "name": "Main Camera", "camera_id": "CAM-MAIN", "classroom_id": "cls-002", "status": "online", "fps": 25, "resolution": "1280x720", "ai_processing": True, "ai_model": "yolov8m"},
+    {"id": "cam-001", "name": "Front Left", "camera_id": "CAM-FRONT-L", "classroom_id": "cls-001", "status": "online", "fps": 30, "resolution": "1920x1080", "ai_processing": True, "ai_model": "yolov8m", "stream_url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"},
+    {"id": "cam-002", "name": "Front Right", "camera_id": "CAM-FRONT-R", "classroom_id": "cls-001", "status": "online", "fps": 30, "resolution": "1920x1080", "ai_processing": True, "ai_model": "yolov8m", "stream_url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"},
+    {"id": "cam-003", "name": "Main Camera", "camera_id": "CAM-MAIN", "classroom_id": "cls-002", "status": "online", "fps": 25, "resolution": "1280x720", "ai_processing": True, "ai_model": "yolov8m", "stream_url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"},
     {"id": "cam-004", "name": "Side Camera", "camera_id": "CAM-SIDE", "classroom_id": "cls-002", "status": "offline", "fps": 0, "resolution": "1920x1080", "ai_processing": False},
-    {"id": "cam-005", "name": "Overview", "camera_id": "CAM-OVERVIEW", "classroom_id": "cls-003", "status": "online", "fps": 30, "resolution": "1920x1080", "ai_processing": True, "ai_model": "yolov8m-pose"},
+    {"id": "cam-005", "name": "Overview", "camera_id": "CAM-OVERVIEW", "classroom_id": "cls-003", "status": "online", "fps": 30, "resolution": "1920x1080", "ai_processing": True, "ai_model": "yolov8m-pose", "stream_url": "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"},
     {"id": "cam-006", "name": "Close-up", "camera_id": "CAM-CLOSE", "classroom_id": "cls-003", "status": "connecting", "fps": 0, "resolution": "1920x1080", "ai_processing": False},
 ]
 

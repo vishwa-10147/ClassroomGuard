@@ -7,7 +7,7 @@ import type { Severity, AlertStatus, CameraStatus, ProcessingState } from '@/typ
 type BadgeVariant = 'default' | 'severity' | 'status' | 'processing' | 'outline';
 
 interface BadgeProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   variant?: BadgeVariant;
   severity?: Severity;
   status?: CameraStatus | AlertStatus | 'warning';

@@ -10,7 +10,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   description?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   footer?: React.ReactNode;
   className?: string;
@@ -162,7 +162,7 @@ interface DrawerProps {
   open: boolean;
   onClose: () => void;
   title?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   side?: 'left' | 'right';
   width?: string;
   className?: string;

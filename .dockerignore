@@ -11,7 +11,11 @@ __pycache__
 *.log
 ai/logs
 ai/analysis_results.json
-storage/uploads
+storage/
 test_data
 basepaper.pdf
 backups
+data*/
+.antigravity/
+anigravity_skills/
+scratch*/

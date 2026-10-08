@@ -33,3 +33,10 @@ def scheduled_retention_enforcement() -> dict:
     """
     from backend.app.tasks.retention_tasks import enforce_retention_policies
     return enforce_retention_policies.delay()
+
+
+@celery_app.task
+def scheduled_weekly_report() -> dict:
+    from backend.app.tasks.alert_tasks import generate_report
+    # Send report to system admin
+    return generate_report.delay(report_type="weekly", params={"email": "admin@classroomguard.local"})

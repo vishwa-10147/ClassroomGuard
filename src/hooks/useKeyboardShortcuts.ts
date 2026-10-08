@@ -18,8 +18,8 @@ export function useKeyboardShortcuts(_options?: ShortcutOptions) {
         target.tagName === 'SELECT' ||
         target.isContentEditable;
 
-      // Cmd/Ctrl+K — Command Palette (always active, even in inputs)
-      if (isMeta && e.key === 'k') {
+      // Cmd/Ctrl+K or Cmd/Ctrl+/ — Command Palette (always active, even in inputs)
+      if (isMeta && (e.key === 'k' || e.key === '/')) {
         e.preventDefault();
         toggleCommand();
         return;

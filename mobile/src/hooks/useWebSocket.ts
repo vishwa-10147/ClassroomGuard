@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const WS_BASE = 'ws://192.168.1.100:8000/ws';
+const WS_BASE = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:8000/ws';
 const RECONNECT_DELAY = 3000;
 
 interface UseWebSocketResult {

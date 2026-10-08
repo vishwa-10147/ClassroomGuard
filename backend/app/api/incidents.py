@@ -1,3 +1,4 @@
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
@@ -8,15 +9,19 @@ from backend.app.schemas.incident import (
     IncidentResponse,
     IncidentUpdate,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from backend.app.core.cache import cache_response
+from fastapi import APIRouter, Depends, Request, HTTPException, Query, Request
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["Incidents"])
 
 
-@router.get("", response_model=IncidentListResponse)
+@router.get("", response_model=
+@cache_response(ttl=60, prefix="incidents")
+IncidentListResponse)
 async def list_incidents(
+    request: Request,
     status: str | None = Query(None),
     severity: str | None = Query(None),
     classroom_id: str | None = Query(None),
@@ -40,7 +45,10 @@ async def list_incidents(
 
     total = await db.scalar(count_query) or 0
     query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
+    try:
+        result = await db.execute(query)
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Database error")
     incidents = result.scalars().all()
 
     return IncidentListResponse(

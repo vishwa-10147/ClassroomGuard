@@ -24,8 +24,10 @@ class ConfidenceCalibrator:
         w = x2 - x1
         h = y2 - y1
 
-        # Penalise very small detections
-        if w < self.min_detection_size or h < self.min_detection_size:
+        # Penalise very small non-target detections (target small objects like phones/calculators/sheets are exempt)
+        target_small_objects = ("cell_phone", "cell phone", "calculator", "cheat_sheet", "earbuds")
+        cls_name = detection.get("class_name", "")
+        if cls_name not in target_small_objects and (w < self.min_detection_size or h < self.min_detection_size):
             conf *= 0.3
 
         # Penalise extreme aspect ratios (> 8:1 or < 1:8)

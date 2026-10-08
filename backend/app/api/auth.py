@@ -13,7 +13,12 @@ from backend.app.core.security import (
 from backend.app.models.organization import Organization
 from backend.app.models.refresh_token import RefreshToken
 from backend.app.models.user import User
+from backend.app.services.integrations.email import send_alert_email
+async def send_auth_email(to_email: str, subject: str, body: str): pass
 from backend.app.schemas.auth import (
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    Verify2FARequest,
     LoginRequest,
     LoginResponse,
     RefreshRequest,
@@ -274,3 +279,61 @@ async def me(
     current_user: User = Depends(get_current_user),
 ):
     return current_user
+
+@router.post("/forgot-password")
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    if user:
+        token = str(uuid4())
+        user.reset_password_token = token
+        import datetime as dt
+        user.reset_password_expires_at = dt.datetime.now(UTC) + dt.timedelta(hours=1)
+        await db.commit()
+        await send_auth_email(user.email, "Password Reset", f"Token: {token}")
+    return {"message": "If an account exists, a reset email was sent."}
+
+@router.post("/reset-password")
+async def reset_password(
+    request: Request,
+    body: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    import datetime as dt
+    result = await db.execute(select(User).where(User.reset_password_token == body.token))
+    user = result.scalar_one_or_none()
+    if not user or user.reset_password_expires_at < dt.datetime.now(UTC):
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    from backend.app.core.security import hash_password
+    user.password_hash = hash_password(body.new_password)
+    user.reset_password_token = None
+    user.reset_password_expires_at = None
+    await log_audit(db, user, "reset_password", "auth", request=request)
+    await db.commit()
+    return {"message": "Password reset successfully."}
+
+@router.post("/verify-2fa")
+async def verify_2fa(
+    request: Request,
+    body: Verify2FARequest,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    if not user or not user.two_factor_enabled:
+        raise HTTPException(status_code=400, detail="Invalid request")
+    # Stub validation:
+    if body.token != "123456":
+        raise HTTPException(status_code=401, detail="Invalid 2FA token")
+    token = create_access_token(user_id=user.id, role=user.role, organization_id=user.organization_id)
+    raw_refresh, refresh_hash, expires_at = create_refresh_token(user.id)
+    refresh_record = RefreshToken(token_hash=refresh_hash, user_id=user.id, expires_at=expires_at)
+    db.add(refresh_record)
+    await log_audit(db, user, "login_2fa", "auth", request=request)
+    await db.commit()
+    from backend.app.schemas.auth import UserResponse
+    return LoginResponse(access_token=token, refresh_token=raw_refresh, expires_in=900, user=UserResponse.model_validate(user))

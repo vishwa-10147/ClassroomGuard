@@ -70,6 +70,11 @@ class User(Base):
         index=True,
     )
 
+    two_factor_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    two_factor_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reset_password_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reset_password_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,

@@ -250,7 +250,8 @@ class ClassroomGuard:
 
 def main():
     parser = argparse.ArgumentParser(description="Classroom Guard - Cheating Detection System")
-    parser.add_argument("--config", default="config.yaml", help="Config file path")
+    parser.add_argument("--mode", choices=["classroom", "exam"], default=None, help="Select mode profile: 'classroom' or 'exam'")
+    parser.add_argument("--config", default=None, help="Config file path")
     parser.add_argument("--no-display", action="store_true", help="Run headless (no OpenCV window)")
     parser.add_argument("--export-trt", action="store_true", help="Export models to TensorRT and exit")
     parser.add_argument("--camera", type=int, default=None, help="Override: run single camera by index")
@@ -261,7 +262,18 @@ def main():
     Path("logs").mkdir(exist_ok=True)
     Path("logs/snapshots").mkdir(exist_ok=True)
 
-    config = load_config(args.config)
+    # Determine config file based on mode
+    config_file = args.config
+    if config_file is None:
+        if args.mode == "exam":
+            config_file = "config_exam.yaml"
+        elif args.mode == "classroom":
+            config_file = "config_classroom.yaml"
+        else:
+            config_file = "config_exam.yaml" # Default to strict exam config if unspecified
+
+    logger.info("Loading mode configuration from: %s", config_file)
+    config = load_config(config_file)
 
     # Override camera if specified
     if args.camera is not None:

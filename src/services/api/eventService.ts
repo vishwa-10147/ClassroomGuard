@@ -12,10 +12,14 @@ export interface EventFilters {
   pageSize?: number;
 }
 
-function normalizeEvents(data: any): DetectionEvent[] {
+type EventResponseData = DetectionEvent[] | { items?: DetectionEvent[]; data?: DetectionEvent[] } | null | undefined;
+
+function normalizeEvents(data: EventResponseData): DetectionEvent[] {
   if (Array.isArray(data)) return data;
-  if (data?.items) return data.items;
-  if (data?.data) return data.data;
+  if (data && typeof data === 'object') {
+    if ('items' in data && Array.isArray(data.items)) return data.items;
+    if ('data' in data && Array.isArray(data.data)) return data.data;
+  }
   return [];
 }
 

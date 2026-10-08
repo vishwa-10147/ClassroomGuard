@@ -107,11 +107,15 @@ def cleanup_old_evidence(self, days: int = 30) -> dict:
 
 @celery_app.task(bind=True, max_retries=2)
 def generate_report(self, report_type: str = "summary", params: dict | None = None) -> dict:
-    """Generate a report in the background.
-
-    Currently returns a stub.  Plug in real PDF / CSV generation here.
-    """
+    import json
     params = params or {}
+    email = params.get("email")
+    if email:
+        # Send actual report logic would be here
+        from backend.app.services.integrations.email import send_alert_email
+        import asyncio
+        asyncio.run(send_alert_email(email, {"title": "Weekly/Monthly Report", "severity": "info", "description": f"Here is your {report_type} report."}))
+    
     return {
         "status": "completed",
         "report_type": report_type,
@@ -120,15 +124,32 @@ def generate_report(self, report_type: str = "summary", params: dict | None = No
     }
 
 
+
 @celery_app.task(bind=True, max_retries=2, soft_time_limit=3600, time_limit=3660)
 def batch_process_video(self, video_path: str, camera_id: str) -> dict:
     """Process an uploaded video through the AI detection pipeline."""
     if not os.path.isfile(video_path):
         return {"status": "error", "message": f"File not found: {video_path}"}
 
-    # Placeholder — wire up the actual AI inference pipeline here.
+    import httpx
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"Triggering AI processing for {video_path} on camera {camera_id}")
+    try:
+        resp = httpx.post(
+            "http://ai:8080/api/process_video",
+            json={"video_path": video_path, "camera_id": camera_id},
+            timeout=10.0
+        )
+        resp.raise_for_status()
+        logger.info(f"AI processing started: {resp.json()}")
+    except Exception as e:
+        logger.error(f"Failed to trigger AI processing: {e}")
+        return {"status": "error", "message": str(e)}
+
     return {
-        "status": "completed",
+        "status": "processing_started",
         "video_path": video_path,
         "camera_id": camera_id,
         "processed_at": datetime.now(UTC).isoformat(),

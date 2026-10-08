@@ -1,63 +1,120 @@
-"""Fine-tune YOLOv8m detector on custom classroom data."""
+"""
+ClassroomGuard - YOLO26m Detector Training
+==========================================
+Fine-tunes YOLO26m on the merged classroom dataset.
+
+All hyperparameters are loaded from yolo26_config.py — change settings there.
+
+Usage:
+    cd ai/
+    python training/train_detector.py
+    python training/train_detector.py --resume
+    python training/train_detector.py --data path/to/custom.yaml --epochs 200
+"""
 
 import argparse
 import logging
+import shutil
+import sys
 from pathlib import Path
+
+# Allow importing from ai/ root
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from yolo26_config import YOLO26
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("train_detector")
 
-BASE_DIR = Path(__file__).resolve().parent
-AI_DIR = BASE_DIR.parent
 
+def train(
+    data_yaml: str = YOLO26.DATA_YAML,
+    model_path: str | None = None,
+    resume: bool = False,
+    run_name: str = YOLO26.RUN_NAME,
+    runs_dir: str = YOLO26.RUNS_DIR,
+    **overrides,
+):
+    """
+    Train YOLO26m on classroom data.
 
-def train(data_yaml: str, epochs: int = 100, batch_size: int = 16,
-          img_size: int = 640, project: str = "runs/detect", name: str = "classguard-detector",
-          device: int = 0, resume: bool = False):
+    Args:
+        data_yaml:  Path to dataset YAML. Defaults to YOLO26.DATA_YAML.
+        model_path: Override model weights. Defaults to YOLO26.get_model().
+        resume:     Resume from last checkpoint.
+        run_name:   Name for this training run (output dir).
+        runs_dir:   Root directory for all training runs.
+        **overrides: Any YOLO26 training kwarg to override (e.g. epochs=50).
+    """
     from ultralytics import YOLO
 
-    model_path = AI_DIR / "models" / "yolov8m.pt"
-    if not model_path.exists():
-        model_path = "yolov8m.pt"
+    # Validate data yaml
+    if not Path(data_yaml).exists():
+        logger.error("Dataset YAML not found: %s", data_yaml)
+        logger.error("Run:  python scripts/merge_datasets.py   first.")
+        return None
 
-    logger.info("Loading base model: %s", model_path)
-    model = YOLO(str(model_path))
+    # Pick model
+    weights = model_path or YOLO26.get_model()
+    logger.info("Base model : %s", weights)
+    logger.info("Dataset    : %s", data_yaml)
+    logger.info("Run name   : %s", run_name)
 
-    logger.info("Starting fine-tuning: epochs=%d, batch=%d, imgsz=%d", epochs, batch_size, img_size)
+    model = YOLO(weights)
+
+    # Merge recommended settings with any overrides
+    train_kwargs = YOLO26.as_train_kwargs()
+    train_kwargs.update(overrides)
+
+    logger.info("Starting YOLO26m fine-tuning (%d epochs)...", train_kwargs["epochs"])
     results = model.train(
         data=data_yaml,
-        epochs=epochs,
-        batch=batch_size,
-        imgsz=img_size,
-        project=str(AI_DIR / project),
-        name=name,
-        device=device,
-        exist_ok=True,
-        pretrained=True,
-        optimizer="auto",
-        verbose=True,
-        seed=42,
-        deterministic=True,
+        project=runs_dir,
+        name=run_name,
         resume=resume,
+        **train_kwargs,
     )
+
+    # Copy best weights to models/
+    best = Path(results.save_dir) / "weights" / "best.pt"
+    if best.exists():
+        dest = Path(YOLO26.CUSTOM_MODEL_OUT)
+        dest.parent.mkdir(exist_ok=True)
+        shutil.copy2(best, dest)
+        logger.info("Best weights saved -> %s", dest)
+    else:
+        logger.warning("best.pt not found at %s", best)
+
     logger.info("Training complete. Results: %s", results.save_dir)
     return results
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fine-tune YOLOv8m detector")
-    parser.add_argument("--data", default=str(BASE_DIR / "classroom.yaml"),
-                        help="Path to dataset YAML")
-    parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--batch", type=int, default=16)
-    parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--device", type=int, default=0)
-    parser.add_argument("--name", default="classguard-detector")
-    parser.add_argument("--resume", action="store_true")
+    parser = argparse.ArgumentParser(
+        description="Fine-tune YOLO26m on classroom phone detection data.\n"
+                    "Settings come from yolo26_config.py — edit that file to change defaults.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--data",    default=YOLO26.DATA_YAML, help="Dataset YAML path")
+    parser.add_argument("--model",   default=None,             help="Override base model weights")
+    parser.add_argument("--epochs",  type=int, default=None,   help=f"Override epochs (default: {YOLO26.EPOCHS})")
+    parser.add_argument("--batch",   type=int, default=None,   help=f"Override batch size (default: {YOLO26.BATCH})")
+    parser.add_argument("--device",  type=int, default=None,   help=f"Override GPU device (default: {YOLO26.DEVICE})")
+    parser.add_argument("--name",    default=YOLO26.RUN_NAME,  help="Run name")
+    parser.add_argument("--resume",  action="store_true",      help="Resume from last checkpoint")
     args = parser.parse_args()
 
-    train(args.data, args.epochs, args.batch, args.imgsz, device=args.device,
-          name=args.name, resume=args.resume)
+    overrides = {}
+    if args.epochs is not None: overrides["epochs"] = args.epochs
+    if args.batch  is not None: overrides["batch"]  = args.batch
+    if args.device is not None: overrides["device"] = args.device
+
+    train(
+        data_yaml=args.data,
+        model_path=args.model,
+        resume=args.resume,
+        run_name=args.name,
+        **overrides,
+    )
 
 
 if __name__ == "__main__":

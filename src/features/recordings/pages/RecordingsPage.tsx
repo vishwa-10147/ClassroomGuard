@@ -183,7 +183,7 @@ export default function RecordingsPage() {
       >
         {playingRecording && (
           <VideoPlayer
-            src={`/api/v1/uploads/video/${playingRecording.filename}`}
+            src={`/api/v1/uploads/video/${playingRecording.filename}?token=${user?.token || ''}`}
             title={playingRecording.name || playingRecording.filename}
           />
         )}

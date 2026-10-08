@@ -130,3 +130,43 @@ Critical Alerts: {critical_alerts}
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=report.pdf"},
     )
+
+@router.get("/export/json")
+async def export_json(
+    classroom_id: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("reports:read")),
+):
+    query = select(DetectionEvent).order_by(DetectionEvent.timestamp.desc())
+    if classroom_id:
+        query = query.where(DetectionEvent.classroom_id == classroom_id)
+    if start_date:
+        query = query.where(DetectionEvent.timestamp >= datetime.fromisoformat(start_date))
+    if end_date:
+        query = query.where(DetectionEvent.timestamp <= datetime.fromisoformat(end_date))
+    query = query.limit(10000)
+
+    result = await db.execute(query)
+    events = result.scalars().all()
+
+    import json
+    data = []
+    for e in events:
+        data.append({
+            "id": e.id,
+            "type": e.event_type,
+            "severity": e.severity,
+            "classroom_id": e.classroom_id,
+            "camera_id": e.camera_id,
+            "seat_id": e.seat_id,
+            "confidence": e.confidence,
+            "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+        })
+
+    return StreamingResponse(
+        iter([json.dumps(data).encode()]),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=report.json"},
+    )

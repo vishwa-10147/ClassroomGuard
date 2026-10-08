@@ -23,7 +23,7 @@ const MAX_VISIBLE = 5;
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   MAX_VISIBLE,
-  addToast: (title, type = 'info', duration = 5000, message) => {
+  addToast: (title, type: ToastType = 'info', duration = 5000, message) => {
     const id = crypto.randomUUID();
     const toast: ToastItem = { id, type, title, message, duration, createdAt: Date.now() };
     set((state) => {

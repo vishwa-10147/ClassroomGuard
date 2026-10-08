@@ -5,7 +5,7 @@ interface PopoverProps {
   open: boolean;
   onClose: () => void;
   anchor: React.ReactNode;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   align?: 'left' | 'right';
   className?: string;
 }

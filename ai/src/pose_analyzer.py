@@ -56,7 +56,6 @@ class PoseAnalyzer:
             conf=self.config["confidence"],
             imgsz=self.config["input_size"],
             device=self.config["device"],
-            half=self.config.get("half", True),
             verbose=False,
         )
 
@@ -86,7 +85,12 @@ class PoseAnalyzer:
         left_ear = keypoints[LEFT_EAR]
         right_ear = keypoints[RIGHT_EAR]
 
+        # If nose/eyes are invisible/invalid but shoulders/ears are valid -> person turned backward
         if any(self._is_invalid(p) for p in [nose, left_eye, right_eye]):
+            left_shoulder = keypoints[LEFT_SHOULDER]
+            right_shoulder = keypoints[RIGHT_SHOULDER]
+            if not self._is_invalid(left_shoulder) and not self._is_invalid(right_shoulder):
+                return {"direction": "turned_back", "yaw": 180.0, "pitch": 0.0}
             return {"direction": "unknown", "yaw": 0.0, "pitch": 0.0}
 
         eye_center_x = (left_eye[0] + right_eye[0]) / 2
@@ -109,7 +113,9 @@ class PoseAnalyzer:
 
         # Determine direction
         direction = "forward"
-        if abs(yaw) > self.rules.get("head_turn_threshold", 25):
+        if abs(yaw) > 40:
+            direction = "turned_back"
+        elif abs(yaw) > self.rules.get("head_turn_threshold", 25):
             direction = "left" if yaw < 0 else "right"
         elif pitch > self.rules.get("looking_down_threshold", 30):
             direction = "down"

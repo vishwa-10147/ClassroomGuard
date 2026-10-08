@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, I
 import { Ionicons } from '@expo/vector-icons';
 import { cameraService, Camera } from '../../src/api/data';
 
-const API_BASE = 'http://192.168.1.100:8000/api/v1';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export default function CamerasScreen() {
   const [cameras, setCameras] = useState<Camera[]>([]);

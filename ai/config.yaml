@@ -1,36 +1,46 @@
 # Classroom Guard - Cheating Detection Configuration
-# RTX 4070 8GB | 2 Cameras | YOLOv8m + Pose
+# RTX 4070 8GB | 2 Cameras | YOLO26m + Pose
+# Upgraded from YOLOv8m → YOLO26m (NMS-free, end-to-end, ~43% faster CPU)
 
 # === CAMERA SETTINGS ===
+# Using local sample videos (27 classroom videos in sample_videos/)
+# To use a webcam, replace source with an integer: 0 = default cam
 cameras:
   - id: 0
-    name: "Front Camera"
-    source: "E:/306-B-5.mp4" # Using video from E: drive for local testing
+    name: "Room 306-B Camera 5"
+    source: "sample_videos/306-B-5.mp4"
     resolution: [1920, 1080]
     fps: 30
   - id: 1
-    name: "Back Camera"
-    source: 1
+    name: "Room 306-B Main"
+    source: "sample_videos/306-B.mp4"
     resolution: [1920, 1080]
     fps: 30
 
 # === MODEL SETTINGS ===
 models:
   detection:
-    weights: "models/yolov8m_custom.pt"   # custom trained model
-    fallback_weights: "yolov8m.pt"         # pretrained if custom not available
-    confidence: 0.5
+    weights: "models/yolo26m_custom.pt"    # YOLO26n custom trained
+    fallback_weights: "yolo26m.pt"
+    confidence: 0.15                        # LOW: phones in classroom videos score 0.15-0.40
     iou_threshold: 0.45
-    input_size: 640
-    device: 0                              # GPU index
-    half: true                             # FP16 for TensorRT speed
+    input_size: 1024                        # 1024px preserves small phone details in 1440p/4K classroom video!
+    device: 0
+    enhance_shadows: true                   # CLAHE shadow enhancement pass for dark under-desk areas
+    quantize: 16                            # FP16 (replaces deprecated 'half: true')
+
+  # Fast cascade detector: yolo26n runs first (2ms), yolo26m confirms (8ms)
+  cascade_detector:
+    enabled: false                          # set true to enable cascade mode
+    fast_weights: "yolo26n.pt"             # already on disk!
+    fast_confidence: 0.25                  # low threshold for first pass
 
   pose:
-    weights: "models/yolov8m-pose.pt"     # pose estimation model
+    weights: "models/yolov8m-pose.pt"
     confidence: 0.5
     input_size: 640
     device: 0
-    half: true
+    quantize: 16                            # FP16 (replaces deprecated 'half: true')
 
 # === TENSORRT EXPORT ===
 tensorrt:
@@ -79,8 +89,8 @@ gaze:
 
 # === FALSE POSITIVE REDUCTION ===
 false_positive_filter:
-  min_consecutive_frames: 3                # object must appear in N consecutive frames before alert
-  min_detection_size: 30                   # pixels — detections smaller than this are penalised
+  min_consecutive_frames: 2                # lowered to 2 so fast phone moves aren't missed
+  min_detection_size: 10                   # lowered to 10px so small handheld phones aren't penalized
   confidence_calibration: true             # enable geometric confidence adjustment
 
 # === CHEATING DETECTION RULES ===
@@ -88,9 +98,15 @@ cheating_rules:
   # Phone detection
   phone_usage:
     enabled: true
-    alert_after_frames: 5                  # flag after 5 consecutive frames
-    confidence_threshold: 0.5
-    proximity_to_person: 150               # pixels - phone near a person = suspicious
+    alert_after_frames: 2                  # alert after 2 consecutive frames
+    confidence_threshold: 0.15             # 0.15 catches hidden/dark phones in under-desk shadows
+    proximity_to_person: 220               # pixels - phone near a person = suspicious
+
+  # Under-desk hidden phone usage (gaze + low hands behavioral rule)
+  under_desk_phone:
+    enabled: true
+    looking_down_duration: 1.5             # seconds looking down into lap/under-desk
+    confidence_threshold: 0.12
 
   # Calculator detection (if not allowed)
   calculator_usage:
@@ -131,12 +147,20 @@ alerts:
 
 # === TRAINING ===
 training:
-  detector_model: yolov8m.pt              # base model for detector fine-tuning
-  pose_model: yolov8m-pose.pt             # base model for pose fine-tuning
-  epochs: 100
-  batch_size: 16
+  detector_model: yolo26m.pt              # YOLO26m base — NMS-free, MuSGD optimizer
+  pose_model: yolov8m-pose.pt             # pose model (stable, no upgrade needed)
+  epochs: 150                             # more epochs for small dataset
+  batch_size: 16                          # RTX 4070 8GB handles this well
   image_size: 640
   project: runs/
+  # Data pipeline
+  data_yaml: "data/merged_classroom/merged.yaml"  # run scripts/merge_datasets.py first
+  freeze_layers: 10                       # freeze backbone, train detection head only
+  augmentation:
+    mosaic: 1.0
+    copy_paste: 0.15                      # copy phone bboxes across images
+    mixup: 0.15
+    erasing: 0.4                          # simulate occluded phones
 
 # === DASHBOARD ===
 dashboard:

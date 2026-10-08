@@ -77,17 +77,19 @@ class CheatingEngine:
             head = pose_analysis.get("head", {})
             posture = pose_analysis.get("posture", {})
 
-            # Head turned too long
+            # Head turned left/right or turned back
             direction = head.get("direction", "unknown")
-            if direction in ("left", "right"):
+            if direction in ("left", "right", "turned_back"):
                 state["head_turn_frames"] += 1
                 duration = state["head_turn_frames"] / 30.0  # assume ~30fps
-                threshold = self.rules["posture"].get("head_turn_duration", 3.0)
+                threshold = self.rules["posture"].get("head_turn_duration", 2.0)
                 if duration >= threshold:
+                    severity = "HIGH" if direction == "turned_back" else "MEDIUM"
+                    msg = f"Student turned BACKWARD for {duration:.1f}s" if direction == "turned_back" else f"Head turned {direction} for {duration:.1f}s"
+                    alert_type = "student_turning_back" if direction == "turned_back" else "suspicious_head_turn"
                     alert = self._make_alert(
-                        track_id, "suspicious_head_turn", "MEDIUM",
-                        f"Head turned {direction} for {duration:.1f}s",
-                        camera_id, {"yaw": head.get("yaw", 0)},
+                        track_id, alert_type, severity,
+                        msg, camera_id, {"yaw": head.get("yaw", 0)},
                     )
                     if alert:
                         alerts.append(alert)

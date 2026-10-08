@@ -1,0 +1,86 @@
+# ClassroomGuard - Pure Exam Mode Configuration (STRICT ENFORCEMENT)
+# Focus: Strict Exam Hall Monitoring - Cell Phones, Calculators, Cheat Sheets, Turning Back, Under-Desk Phones
+
+mode: "exam"
+
+# === CAMERA SETTINGS ===
+cameras:
+  - id: 0
+    name: "Exam Hall 306-B Desk Cam"
+    source: "sample_videos/306-B-5.mp4"
+    resolution: [1920, 1080]
+    fps: 30
+  - id: 1
+    name: "Exam Hall 306-B Main Cam"
+    source: "sample_videos/306-B.mp4"
+    resolution: [1920, 1080]
+    fps: 30
+
+# === MODEL SETTINGS ===
+models:
+  detection:
+    weights: "models/model_exam.pt"         # Exam multi-class model (phone, calculator, sheet, earbuds)
+    fallback_weights: "models/yolo26m_custom.pt"
+    confidence: 0.15                         # Highly sensitive threshold for exam room
+    iou_threshold: 0.45
+    input_size: 1024                         # 1024px high-res for small under-desk objects
+    device: 0
+    enhance_shadows: true                    # Dual CLAHE shadow-pass for under-desk hidden phones
+
+  pose:
+    weights: "models/yolov8m-pose.pt"
+    confidence: 0.5
+    input_size: 640
+    device: 0
+
+# === CHEATING RULES (STRICT EXAM ENFORCEMENT) ===
+cheating_rules:
+  # Cell Phone Prohibition
+  phone_usage:
+    enabled: true
+    alert_after_frames: 2                   # Alert after 2 consecutive frames (~0.1s)
+    confidence_threshold: 0.15
+    proximity_to_person: 220
+
+  # Under-Desk Hidden Phone (Gaze + Low Hands)
+  under_desk_phone:
+    enabled: true
+    looking_down_duration: 1.5              # 1.5s looking down into lap/under desk
+    confidence_threshold: 0.12
+
+  # Calculator Usage Prohibition
+  calculator_usage:
+    enabled: true
+    alert_after_frames: 2
+    confidence_threshold: 0.35
+    allowed_sections: []                    # Empty = prohibited for all students
+
+  # Posture & Head Turn (Turning Back to Copy)
+  posture:
+    enabled: true
+    head_turn_threshold: 25                 # 25 deg head turn
+    head_turn_duration: 1.5                 # Alert after 1.5s head turn
+    looking_down_threshold: 30              # Looking down into lap/sheets
+    looking_down_duration: 1.5
+
+  # Document / Sheet Passing
+  document_passing:
+    enabled: true
+    hand_proximity_threshold: 100           # 100px hands close between students
+    min_duration: 0.8                       # 0.8s hand proximity
+
+# === FALSE POSITIVE FILTER ===
+false_positive_filter:
+  min_consecutive_frames: 2                 # Fast alert trigger for exam room
+  min_detection_size: 10                    # 10px min size (does not penalize phones/calculators)
+  confidence_calibration: true
+
+# === ALERTS & DASHBOARD ===
+alerts:
+  enabled: true
+  cooldown: 3.0                             # Short 3.0s cooldown to capture repeated infractions
+
+dashboard:
+  enabled: true
+  port: 8080
+  host: "0.0.0.0"

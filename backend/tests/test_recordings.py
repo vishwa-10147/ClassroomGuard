@@ -99,3 +99,19 @@ async def test_delete_recording(client: AsyncClient):
         headers=auth_header(data["access_token"]),
     )
     assert resp.status_code in (200, 404)
+
+@pytest.mark.asyncio
+async def test_video_playback_with_query_token(client: AsyncClient):
+    # This tests the playback endpoint which was modified to accept ?token= query parameter
+    data = await login(client, "viewer@classguard.dev", "Viewer@12345")
+    token = data["access_token"]
+    
+    # Normally we'd upload a file first, but we can just test if the endpoint authenticates via token param
+    resp = await client.get(f"/api/v1/uploads/video/nonexistent.mp4?token={token}")
+    # It should not return 401, but 404 since the file doesn't exist
+    assert resp.status_code == 404
+    
+    # Without token, it should be 401
+    resp_unauth = await client.get("/api/v1/uploads/video/nonexistent.mp4")
+    assert resp_unauth.status_code == 401
+

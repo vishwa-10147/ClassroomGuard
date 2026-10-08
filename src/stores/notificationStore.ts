@@ -93,21 +93,21 @@ export const useNotificationStore = create<NotificationState>((set) => ({
         apiClient.get('/events', { params: { limit: 5 } }).catch(() => ({ data: [] })),
       ]);
 
-      const alerts = (alertsRes.data?.items || alertsRes.data || []).map((a: any) => ({
+      const alerts = (alertsRes.data?.items || alertsRes.data || []).map((a: Record<string, unknown>) => ({
         id: `alert-${a.id}`,
         type: a.severity === 'high' ? 'error' as const : a.severity === 'medium' ? 'warning' as const : 'info' as const,
-        title: a.title || a.alertType || 'Alert',
-        message: a.description || '',
-        createdAt: new Date(a.createdAt || a.detectedAt || Date.now()).getTime(),
+        title: (a.title || a.alertType || 'Alert') as string,
+        message: (a.description || '') as string,
+        createdAt: new Date((a.createdAt || a.detectedAt || Date.now()) as string | number).getTime(),
         read: false,
       }));
 
-      const events = (Array.isArray(eventsRes.data) ? eventsRes.data : eventsRes.data?.items || []).map((e: any) => ({
+      const events = (Array.isArray(eventsRes.data) ? eventsRes.data : eventsRes.data?.items || []).map((e: Record<string, unknown>) => ({
         id: `event-${e.id}`,
         type: e.severity === 'high' ? 'error' as const : 'warning' as const,
-        title: e.type || 'Detection Event',
-        message: `${e.className || 'object'} detected (${((e.confidence || 0) * 100).toFixed(0)}%)`,
-        createdAt: new Date(e.timestamp || Date.now()).getTime(),
+        title: (e.type || 'Detection Event') as string,
+        message: `${e.className || 'object'} detected (${((Number(e.confidence) || 0) * 100).toFixed(0)}%)`,
+        createdAt: new Date((e.timestamp || Date.now()) as string | number).getTime(),
         read: false,
       }));
 

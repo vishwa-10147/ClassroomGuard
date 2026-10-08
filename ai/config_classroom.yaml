@@ -1,0 +1,68 @@
+# ClassroomGuard - Daily Classroom Mode Configuration
+# Focus: Cell Phone Detection + General Student Attention & Posture
+
+mode: "classroom"
+
+# === CAMERA SETTINGS ===
+cameras:
+  - id: 0
+    name: "Room 306-B Camera 5"
+    source: "sample_videos/306-B-5.mp4"
+    resolution: [1920, 1080]
+    fps: 30
+  - id: 1
+    name: "Room 306-B Main"
+    source: "sample_videos/306-B.mp4"
+    resolution: [1920, 1080]
+    fps: 30
+
+# === MODEL SETTINGS ===
+models:
+  detection:
+    weights: "models/model_classroom.pt"    # Classroom specific model
+    fallback_weights: "models/yolo26m_custom.pt"
+    confidence: 0.15                         # Sensitive threshold for small/angled phones
+    iou_threshold: 0.45
+    input_size: 1024
+    device: 0
+    enhance_shadows: true                    # CLAHE shadow enhancement for desk/handheld phones
+
+  pose:
+    weights: "models/yolov8m-pose.pt"
+    confidence: 0.5
+    input_size: 640
+    device: 0
+
+# === CHEATING / BEHAVIORAL RULES ===
+cheating_rules:
+  phone_usage:
+    enabled: true
+    alert_after_frames: 2                   # Alert after 2 consecutive frames (~0.1s)
+    confidence_threshold: 0.15              # Sensitive 0.15 threshold for angled/flat desk phones
+    proximity_to_person: 200
+
+  calculator_usage:
+    enabled: false                           # Calculators allowed in general class
+
+  posture:
+    enabled: true
+    head_turn_threshold: 35                 # 35 deg head turn
+    head_turn_duration: 4.0                 # 4.0s duration
+    looking_down_threshold: 35
+    looking_down_duration: 3.0
+
+# === FALSE POSITIVE FILTER ===
+false_positive_filter:
+  min_consecutive_frames: 3
+  min_detection_size: 15
+  confidence_calibration: true
+
+# === ALERTS & DASHBOARD ===
+alerts:
+  enabled: true
+  cooldown: 10.0                            # 10s cooldown between alerts
+
+dashboard:
+  enabled: true
+  port: 8080
+  host: "0.0.0.0"

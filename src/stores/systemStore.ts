@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { apiClient } from '@/services/api/client';
+import type { Camera } from '@/types/camera.types';
 
 interface SystemState {
   aiStatus: 'online' | 'degraded' | 'offline';
@@ -38,7 +39,7 @@ export const useSystemStore = create<SystemState>((set) => ({
 
       const cameras = camerasRes.data;
       const onlineCameras = Array.isArray(cameras)
-        ? cameras.filter((c: any) => c.status === 'online').length
+        ? cameras.filter((c: Camera) => c.status === 'online').length
         : 0;
       const totalCameras = Array.isArray(cameras) ? cameras.length : 0;
 

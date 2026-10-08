@@ -42,8 +42,8 @@ TEST_VIDEOS = [
 ]
 
 DEVICE = 0
-CONF_DET = 0.3
-CONF_POSE = 0.5
+CONF_DET = 0.30
+CONF_POSE = 0.50
 IMG_SIZE = 640
 SAMPLE_EVERY = 3
 WINDOW_SIZE = 15
@@ -52,6 +52,16 @@ CALC_THRESHOLD = 4
 HEAD_TURN_THRESHOLD = 1.5
 LOOKING_DOWN_THRESHOLD = 1.0
 COOLDOWN_S = 5.0
+
+
+def normalize_class_name(name: str) -> str:
+    """Normalize COCO/dataset class names to a consistent format.
+    'cell phone' -> 'cell_phone', 'cell-phones' -> 'cell_phone', etc.
+    """
+    n = name.lower().strip().replace(" ", "_").replace("-", "_")
+    if n == "cell_phones":
+        n = "cell_phone"
+    return n
 
 
 class StudentState:
@@ -168,6 +178,7 @@ def analyze_video(video_path, detector, pose_model, tracker, gaze_estimator, fp_
             names = r.names if hasattr(r, "names") else detector.names
             for box, c, cls_id in zip(boxes, confs, classes):
                 cls_name = names.get(int(cls_id), "unknown")
+                cls_name = normalize_class_name(cls_name)  # Fix 'cell phone' -> 'cell_phone'
                 det = {
                     "bbox": box.astype(int).tolist(),
                     "confidence": float(c),
@@ -240,7 +251,7 @@ def analyze_video(video_path, detector, pose_model, tracker, gaze_estimator, fp_
                         hands_up = wrist_cy < shoulder_cy - 30
 
             # Phone proximity
-            phone_dets = [d for d in objects if d["class_name"] == "cell phone"]
+            phone_dets = [d for d in objects if d["class_name"] == "cell_phone"]
             phone_near = False
             if phone_dets:
                 phone_bbox = phone_dets[0]["bbox"]
@@ -466,7 +477,15 @@ async def seed_database(all_results, client):
 
 async def main():
     logger.info("Loading models...")
-    detector = YOLO(str(MODELS_DIR / "yolov8m.pt"))
+    # Try YOLO26m first (preferred), fall back to YOLO26n (on disk) then yolov8m
+    model_candidates = [
+        MODELS_DIR / "yolo26m_custom.pt",   # custom trained
+        MODELS_DIR / "yolo26m.pt",           # base YOLO26m
+        MODELS_DIR / "yolov8m.pt",           # legacy fallback
+    ]
+    det_path = next((p for p in model_candidates if p.exists()), "yolo26m.pt")
+    logger.info("Detection model: %s", det_path)
+    detector = YOLO(str(det_path))
     pose_model = YOLO(str(MODELS_DIR / "yolov8m-pose.pt"))
     logger.info("Models loaded on GPU.")
 

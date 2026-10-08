@@ -47,9 +47,13 @@ class CameraStream:
             t0 = time.time()
             ret, frame = self._cap.read()
             if not ret:
-                logger.warning("Camera %s: failed to read frame, retrying...", self.camera_id)
-                time.sleep(0.1)
-                continue
+                # If reading a video file, rewind to start for 24-7 continuous stream
+                if isinstance(self.source, str) and not self.source.isdigit():
+                    self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ret, frame = self._cap.read()
+                if not ret or frame is None:
+                    time.sleep(0.1)
+                    continue
 
             with self._lock:
                 self.frame = frame

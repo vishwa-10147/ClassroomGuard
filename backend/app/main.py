@@ -58,10 +58,13 @@ from backend.app.api.settings import router as settings_router
 from backend.app.api.test_rbac import router as rbac_router
 from backend.app.api.uploads import router as uploads_router
 from backend.app.api.users import router as users_router
+from backend.app.api.search import router as search_router
 from backend.app.api.webhooks import router as webhooks_router
+from prometheus_client import make_asgi_app
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(search_router)
 app.include_router(classrooms_router)
 app.include_router(cameras_router)
 app.include_router(alerts_router)
@@ -79,6 +82,11 @@ app.include_router(notifications_router)
 app.include_router(compliance_router)
 app.include_router(webhooks_router)
 app.include_router(organizations_router)
+
+# Mount Prometheus metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
+
 
 
 @app.get("/")
