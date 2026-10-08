@@ -1,21 +1,76 @@
-node_modules
-.venv
-ai/.venv
-dist
+# === Version Control & IDE ===
 .git
+.gitignore
 .github
+.vscode
+.idea
+.antigravity/
+anigravity_skills/
+
+# === Dependencies ===
+node_modules
+**/node_modules
+.venv
+**/venv
+ai/.venv
+backend/.venv
+
+# === Build Outputs ===
+dist
+build
+*.egg-info
+
+# === Byte-compiled / cache ===
 __pycache__
 **/__pycache__
 *.pyc
+*.pyo
+*.pyd
+*.tsbuildinfo
+.pytest_cache
+.coverage*
+
+# === Environment & Secrets ===
 .env
+.env.*
+!.env.example
+
+# === Logs & Runtime Storage ===
 *.log
-ai/logs
-ai/analysis_results.json
+logs/
+ai/logs/
 storage/
-test_data
+ai/storage/
+ai/analysis_results.json
+
+# === Heavy Media & Datasets ===
+data/
+data_*/
+ai/sample_videos/
+ai/weights/
+ai/models/*.pt
+ai/models/*.engine
+ai/models/*.onnx
+ai/runs/
+ai/train/runs/
+test_data/
+*.mp4
+*.avi
+*.mov
+*.xlsx
+Ultra_Advanced_Habit_Tracker.xlsx*
 basepaper.pdf
-backups
-data*/
-.antigravity/
-anigravity_skills/
-scratch*/
+
+# === Testing & Reports ===
+e2e/
+playwright-report/
+test-results/
+coverage/
+
+# === Scratch & Temporary ===
+scratch*
+read_files.cjs
+task1.py
+task2.py
+task3.py
+backups/
