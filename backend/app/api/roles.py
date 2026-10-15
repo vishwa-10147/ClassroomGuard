@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/api/v1/roles", tags=["Roles"])
 VIEW_ROLES = ("super_admin", "admin", "faculty", "security", "viewer")
 SUPER_ADMIN_ROLES = ("super_admin",)
 
-DEFAULT_ROLES = [
+DEFAULT_ROLES: list[dict[str, Any]] = [
     {
         "name": name,
         "description": ROLE_DESCRIPTIONS[name],
