@@ -13,6 +13,7 @@ import type { Classroom } from '@/types/classroom.types';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPermission } from '@/utils/permissions';
 import { PERMISSIONS } from '@/utils/constants';
+import { authedStreamUrl, useAuthedImage } from '@/hooks/useAuthedImage';
 
 const Card = ({ children, className }: any) => (
   <div className={cn('bg-cg-bg-secondary border border-cg-border-default rounded-lg shadow-sm', className)}>
@@ -41,7 +42,7 @@ function MjpegStream({ cameraId, className }: { cameraId: string; className?: st
 
   useEffect(() => {
     setError(false);
-    setSrc(`/api/v1/cameras/${cameraId}/stream`);
+    setSrc(authedStreamUrl(`/cameras/${cameraId}/stream`));
   }, [cameraId]);
 
   if (error) {
@@ -64,14 +65,8 @@ function MjpegStream({ cameraId, className }: { cameraId: string; className?: st
 }
 
 function SnapshotView({ cameraId, className }: { cameraId: string; className?: string }) {
-  const [src, setSrc] = useState('');
-  const [error, setError] = useState(false);
   const [key, setKey] = useState(0);
-
-  useEffect(() => {
-    setSrc(`/api/v1/cameras/${cameraId}/snapshot?t=${key}`);
-    setError(false);
-  }, [cameraId, key]);
+  const { src, error } = useAuthedImage(`/cameras/${cameraId}/snapshot`, key);
 
   if (error) {
     return (
@@ -84,12 +79,7 @@ function SnapshotView({ cameraId, className }: { cameraId: string; className?: s
 
   return (
     <div className={cn('relative', className)}>
-      <img
-        src={src}
-        alt={`Camera ${cameraId}`}
-        className="object-cover w-full h-full"
-        onError={() => setError(true)}
-      />
+      {src && <img src={src} alt={`Camera ${cameraId}`} className="object-cover w-full h-full" />}
       <button
         onClick={(e) => { e.stopPropagation(); setKey((k) => k + 1); }}
         className="absolute top-2 right-2 rounded bg-black/50 p-1 text-white hover:bg-black/70 transition-colors"

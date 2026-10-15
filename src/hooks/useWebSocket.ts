@@ -13,7 +13,8 @@ export function useWebSocket(onMessage: MessageHandler) {
 
     if (!token) return;
 
-    const url = `${protocol}//${host}/ws`;
+    // Browsers cannot set headers on WebSockets, so the API expects the token in the query
+    const url = `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 

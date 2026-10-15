@@ -28,7 +28,9 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
-  isLoading: false,
+  // A saved token must be verified before route guards decide anything, otherwise a page
+  // refresh or deep link would bounce to /login and lose the requested page
+  isLoading: !!localStorage.getItem('token'),
 
   login: async (email, password) => {
     set({ isLoading: true });
