@@ -1,5 +1,3 @@
-from sqlalchemy.exc import SQLAlchemyError
-
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
 from backend.app.models.incident import Incident
@@ -9,8 +7,9 @@ from backend.app.schemas.incident import (
     IncidentResponse,
     IncidentUpdate,
 )
-from fastapi import APIRouter, Depends, Request, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import desc, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["Incidents"])

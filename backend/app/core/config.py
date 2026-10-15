@@ -13,12 +13,19 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
 
+    # Shared secret the AI pipeline sends as X-Service-Token to ingest detection events.
+    # Empty disables service-token auth.
+    ai_service_token: str = ""
+
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
     frontend_url: str = "http://localhost:5173"
     allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     storage_path: str = "./storage"
+
+    # Disable only for automated test runs that log in many times per minute
+    rate_limit_enabled: bool = True
 
     use_redis: bool = True
     redis_url: str = "redis://localhost:6379/0"

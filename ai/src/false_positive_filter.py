@@ -53,13 +53,16 @@ class FrameRecord:
     bbox: list[int]
     confidence: float
     class_name: str
+    timestamp: float = field(default_factory=lambda: time.monotonic())
 
 
 class MultiFrameVerifier:
     """Requires N consecutive frames with the same detection before confirming."""
 
-    def __init__(self, min_consecutive_frames: int = 3):
+    def __init__(self, min_consecutive_frames: int = 3, max_gap_seconds: float = 1.0):
         self.min_consecutive = min_consecutive_frames
+        # Records further apart than this are not "consecutive" (object left and came back)
+        self.max_gap = max_gap_seconds
         # key = (class_name, spatial_cluster_id) -> deque of frame records
         self._buffers: dict[str, deque[FrameRecord]] = defaultdict(
             lambda: deque(maxlen=min_consecutive_frames + 5)
@@ -81,8 +84,10 @@ class MultiFrameVerifier:
         if len(recent) < self.min_consecutive:
             return False
 
-        # Check all recent records have similar bbox positions
+        # Check recent records are close in time and have similar bbox positions
         for i in range(1, len(recent)):
+            if recent[i].timestamp - recent[i - 1].timestamp > self.max_gap:
+                return False
             if not self._bboxes_overlap(recent[0].bbox, recent[i].bbox, threshold=0.3):
                 return False
         return True

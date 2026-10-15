@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
+from backend.app.core.permissions import ROLE_PERMISSIONS
 from backend.app.core.security import hash_password
 from backend.app.models.user import User
 from backend.app.schemas.user import (
@@ -17,6 +18,16 @@ router = APIRouter(
     prefix="/api/v1/users",
     tags=["Users"],
 )
+
+
+def _guard_user_change(actor: User, new_role: str | None = None, target: User | None = None) -> None:
+    """Block unknown roles and stop non-super-admins from creating, promoting or editing super admins."""
+    if new_role is not None and new_role not in ROLE_PERMISSIONS:
+        raise HTTPException(status_code=422, detail=f"Unknown role: {new_role}")
+    if actor.role == "super_admin":
+        return
+    if new_role == "super_admin" or (target is not None and target.role == "super_admin"):
+        raise HTTPException(status_code=403, detail="Only a super admin can manage super admin accounts")
 
 
 @router.get(
@@ -69,6 +80,7 @@ async def create_user(
     current_user: User = Depends(require_permission("users:write")),
     db: AsyncSession = Depends(get_db),
 ):
+    _guard_user_change(current_user, new_role=user_data.role)
     existing = await db.execute(
         select(User).where(User.email == user_data.email)
     )
@@ -126,6 +138,7 @@ async def update_user(
         )
 
     updates = update_data.model_dump(exclude_unset=True)
+    _guard_user_change(current_user, new_role=updates.get("role"), target=user)
 
     if "email" in updates:
         existing = await db.execute(
@@ -181,6 +194,7 @@ async def put_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     updates = update_data.model_dump(exclude_unset=True)
+    _guard_user_change(current_user, new_role=updates.get("role"), target=user)
     if "email" in updates:
         existing = await db.execute(
             select(User).where(User.email == updates["email"], User.id != user_id)
@@ -226,6 +240,7 @@ async def disable_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    _guard_user_change(current_user, target=user)
 
     old_status = user.status
     user.status = "disabled"

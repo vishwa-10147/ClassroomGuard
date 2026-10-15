@@ -54,11 +54,11 @@ from backend.app.api.organizations import router as organizations_router
 from backend.app.api.recordings import router as recordings_router
 from backend.app.api.reports import router as reports_router
 from backend.app.api.roles import router as roles_router
+from backend.app.api.search import router as search_router
 from backend.app.api.settings import router as settings_router
 from backend.app.api.test_rbac import router as rbac_router
 from backend.app.api.uploads import router as uploads_router
 from backend.app.api.users import router as users_router
-from backend.app.api.search import router as search_router
 from backend.app.api.webhooks import router as webhooks_router
 from prometheus_client import make_asgi_app
 

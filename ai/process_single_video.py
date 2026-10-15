@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import os
 import sys
 import logging
 from pathlib import Path
@@ -56,22 +57,12 @@ async def main():
     
     # Seed database correctly using the provided camera_id
     async with httpx.AsyncClient(timeout=30.0) as client:
-        # Login
-        BACKEND_URL = "http://backend:8000" # Internal docker network url for backend
-        try:
-            resp = await client.post(f"{BACKEND_URL}/api/v1/auth/login", json={
-                "email": "admin@classguard.dev",
-                "password": "Admin@12345",
-            })
-            if resp.status_code != 200:
-                logger.error("Login failed")
-                return
-            token_data = resp.json()
-        except Exception as e:
-            logger.error(f"Login failed: {e}")
+        BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8000").rstrip("/")
+        service_token = os.environ.get("AI_SERVICE_TOKEN", "")
+        if not service_token:
+            logger.error("AI_SERVICE_TOKEN is not set - cannot push results to the backend")
             return
-
-        headers = {"Authorization": f"Bearer {token_data['access_token']}"}
+        headers = {"X-Service-Token": service_token}
 
         # Fetch camera details to get classroom_id
         resp = await client.get(f"{BACKEND_URL}/api/v1/cameras/{args.camera_id}", headers=headers)
@@ -79,7 +70,7 @@ async def main():
             logger.error(f"Camera not found: {args.camera_id}")
             return
         camera = resp.json()
-        classroom_id = camera["classroom_id"]
+        classroom_id = camera["classroomId"]
 
         from datetime import datetime, timezone, timedelta
         import json

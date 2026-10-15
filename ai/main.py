@@ -51,12 +51,12 @@ class ClassroomGuard:
         self.detector = YOLODetector(config)
         self.pose_analyzer = PoseAnalyzer(config)
 
-        # New modules
-        self.tracker = ByteTracker(config)
+        # Tracking, false-positive filtering and rule state are per camera: track IDs and
+        # pixel positions from different cameras must never be matched against each other.
         self.gaze_estimator = GazeEstimator(config)
-        self.fp_filter = FalsePositiveFilter(config)
-
-        self.cheating_engine = CheatingEngine(config)
+        self.trackers: dict[int, ByteTracker] = {}
+        self.fp_filters: dict[int, FalsePositiveFilter] = {}
+        self.cheating_engines: dict[int, CheatingEngine] = {}
         self.alert_system = AlertSystem(config)
 
         # Camera manager
@@ -100,6 +100,13 @@ class ClassroomGuard:
         finally:
             self.stop()
 
+    def _camera_state(self, cam_id: int) -> tuple[ByteTracker, FalsePositiveFilter, CheatingEngine]:
+        if cam_id not in self.trackers:
+            self.trackers[cam_id] = ByteTracker(self.config)
+            self.fp_filters[cam_id] = FalsePositiveFilter(self.config)
+            self.cheating_engines[cam_id] = CheatingEngine(self.config)
+        return self.trackers[cam_id], self.fp_filters[cam_id], self.cheating_engines[cam_id]
+
     def _main_loop(self, active_cams: list[int]):
         frame_count = 0
         stats_interval = time.time()
@@ -112,15 +119,21 @@ class ClassroomGuard:
                 if not ok or frame is None:
                     continue
 
+                tracker, fp_filter, cheating_engine = self._camera_state(cam_id)
+
                 # 1. Detect objects (with false-positive filtering)
                 raw_detections = self.detector.detect(frame)
-                detections = self.fp_filter.filter_detections(raw_detections)
+                detections = fp_filter.filter_detections(raw_detections)
 
                 persons = [d for d in detections if d["class_name"] == "person"]
-                objects = [d for d in detections if d["class_name"] != "person"]
+                # Objects only count once they persist across consecutive frames
+                objects = [
+                    d for d in detections
+                    if d["class_name"] != "person" and fp_filter.verify_object_detection(d)
+                ]
 
                 # 2. Track students via ByteTracker
-                tracked = self.tracker.update(persons)
+                tracked = tracker.update(persons)
 
                 # 3. Pose analysis per tracked student
                 pose_analyses = self.pose_analyzer.full_analysis(frame)
@@ -141,24 +154,20 @@ class ClassroomGuard:
                         pitch_val = head_pose.pitch
 
                     # Update tracker with pose info
-                    self.tracker.update_head_direction(track.track_id, head_direction)
-                    self.tracker.update_posture(track.track_id,
+                    tracker.update_head_direction(track.track_id, head_direction)
+                    tracker.update_posture(track.track_id,
                                                 best_pose.get("posture", {}).get("posture", "unknown")
                                                 if best_pose else "unknown")
 
-                    # Verify object detections persist across frames
-                    for obj in objects:
-                        self.fp_filter.verify_object_detection(obj)
-
                     # 5. Evaluate cheating rules
-                    alerts = self.cheating_engine.evaluate(track, best_pose, objects, cam_id)
+                    alerts = cheating_engine.evaluate(track, best_pose, objects, cam_id)
 
                     # 6. Process alerts (with debounce + annotated frame for evidence)
                     if alerts and annotated_for_alerts is None:
                         annotated_for_alerts = self.detector.draw_detections(frame, detections)
                         annotated_for_alerts = self.pose_analyzer.draw_pose(annotated_for_alerts, pose_analyses)
                     for alert in alerts:
-                        if self.fp_filter.should_alert(track.track_id, alert["alert_type"]):
+                        if fp_filter.should_alert(track.track_id, alert["alert_type"]):
                             self.alert_system.process_alert(alert, frame, annotated_for_alerts)
 
                 # 7. Draw annotations
@@ -192,7 +201,7 @@ class ClassroomGuard:
             if self.dashboard and time.time() - stats_interval > 2.0:
                 fps_data = {str(cam_id): self.camera_manager.get_fps(cam_id) for cam_id in active_cams}
                 self.dashboard.update_stats({
-                    "total_students": len(self.tracker.tracks),
+                    "total_students": sum(len(t.tracks) for t in self.trackers.values()),
                     "fps": fps_data,
                     "avg_fps": sum(fps_data.values()) / max(len(fps_data), 1),
                 })

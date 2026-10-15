@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, or_
-from sqlalchemy.ext.asyncio import AsyncSession
-from backend.app.api.dependencies import get_db, require_permission
-from backend.app.models.user import User
-from backend.app.models.classroom import Classroom
+from backend.app.api.dependencies import _get_user_permissions, get_db, require_permission
 from backend.app.models.alert import Alert
+from backend.app.models.classroom import Classroom
+from backend.app.models.user import User
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/search", tags=["Search"])
 
@@ -14,10 +14,12 @@ async def global_search(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("search:read")),
 ):
-    # Search users (students/teachers)
-    user_query = select(User).where(or_(User.name.ilike(f"%{q}%"), User.email.ilike(f"%{q}%"))).limit(10)
-    users_result = await db.execute(user_query)
-    users = [{"id": u.id, "name": u.name, "type": "user"} for u in users_result.scalars().all()]
+    # Search users (students/teachers) - only for roles allowed to see users
+    users: list[dict] = []
+    if "users:read" in _get_user_permissions(_user):
+        user_query = select(User).where(or_(User.name.ilike(f"%{q}%"), User.email.ilike(f"%{q}%"))).limit(10)
+        users_result = await db.execute(user_query)
+        users = [{"id": u.id, "name": u.name, "type": "user"} for u in users_result.scalars().all()]
 
     # Search classrooms
     class_query = select(Classroom).where(Classroom.name.ilike(f"%{q}%")).limit(10)

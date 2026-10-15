@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { eventService } from '@/services/api/eventService';
 import type { DetectionEvent } from '@/types/event.types';
 import { Filter, Search, Smartphone, Clock, MapPin, Video, AlertTriangle, Maximize2, Loader2 } from 'lucide-react';
@@ -21,16 +22,33 @@ const displayConf = (c: number) => c > 1 ? c.toFixed(0) : (c * 100).toFixed(0);
 export default function EventsPage() {
   const [events, setEvents] = useState<DetectionEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const { id: routeEventId } = useParams();
+  const navigate = useNavigate();
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(routeEventId ?? null);
 
   useEffect(() => {
     eventService.getRecent(50)
       .then((data) => {
         setEvents(data);
-        if (data.length > 0) setSelectedEventId(data[0].id);
+        setSelectedEventId((current) => current ?? data[0]?.id ?? null);
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Follow /events/:id links, fetching the event if it is outside the recent window
+  useEffect(() => {
+    if (!routeEventId || loading) return;
+    setSelectedEventId(routeEventId);
+    if (events.some((e) => e.id === routeEventId)) return;
+    eventService.getById(routeEventId)
+      .then((event) => setEvents((prev) => [event, ...prev.filter((e) => e.id !== event.id)]))
+      .catch(() => setSelectedEventId(events[0]?.id ?? null));
+  }, [routeEventId, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectEvent = (id: string) => {
+    setSelectedEventId(id);
+    navigate(`/events/${id}`, { replace: true });
+  };
 
   const selectedEvent = events.find(e => e.id === selectedEventId);
 
@@ -66,7 +84,7 @@ export default function EventsPage() {
             {events.map(event => (
               <div 
                 key={event.id}
-                onClick={() => setSelectedEventId(event.id)}
+                onClick={() => selectEvent(event.id)}
                 className={cn(
                   "p-3 rounded-lg border cursor-pointer transition-colors",
                   selectedEventId === event.id 

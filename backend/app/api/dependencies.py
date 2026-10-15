@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import hmac
 from collections.abc import AsyncGenerator
 
+from backend.app.core.config import settings
 from backend.app.core.database import AsyncSessionLocal
+from backend.app.core.permissions import ROLE_PERMISSIONS
 from backend.app.core.security import decode_access_token
 from backend.app.core.tenant import current_org_id
 from backend.app.models.user import User
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -107,65 +110,7 @@ def require_roles(*allowed_roles: str):
 
 def _get_user_permissions(user: User) -> list[str]:
     """Extract permission list from user's role name."""
-    role_perms = {
-        "super_admin": [
-            "users:read", "users:write", "users:delete",
-            "roles:read", "roles:write", "roles:delete",
-            "cameras:read", "cameras:write", "cameras:delete",
-            "classrooms:read", "classrooms:write", "classrooms:delete",
-            "alerts:read", "alerts:write", "alerts:manage",
-            "incidents:read", "incidents:write",
-            "recordings:read", "recordings:delete",
-            "events:read",
-            "reports:read", "reports:write",
-            "settings:read", "settings:write",
-            "audit_logs:read", "audit_logs:write",
-            "webhooks:view", "webhooks:manage",
-        ],
-        "admin": [
-            "users:read", "users:write",
-            "cameras:read", "cameras:write", "cameras:delete",
-            "classrooms:read", "classrooms:write",
-            "alerts:read", "alerts:write", "alerts:manage",
-            "incidents:read", "incidents:write",
-            "recordings:read", "recordings:delete",
-            "events:read",
-            "reports:read", "reports:write",
-            "settings:read",
-            "audit_logs:read",
-            "webhooks:view", "webhooks:manage",
-        ],
-        "faculty": [
-            "cameras:read",
-            "classrooms:read",
-            "alerts:read", "alerts:manage",
-            "incidents:read",
-            "recordings:read",
-            "events:read",
-            "reports:read",
-            "webhooks:view",
-        ],
-        "security": [
-            "cameras:read",
-            "classrooms:read",
-            "alerts:read", "alerts:write", "alerts:manage",
-            "incidents:read", "incidents:write",
-            "recordings:read",
-            "events:read",
-            "reports:read",
-            "webhooks:view",
-        ],
-        "viewer": [
-            "cameras:read",
-            "classrooms:read",
-            "alerts:read",
-            "incidents:read",
-            "events:read",
-            "reports:read",
-            "webhooks:view",
-        ],
-    }
-    return role_perms.get(user.role, [])
+    return ROLE_PERMISSIONS.get(user.role, [])
 
 
 def require_permission(permission: str):
@@ -179,4 +124,29 @@ def require_permission(permission: str):
                 detail=f"Insufficient permissions: {permission} required",
             )
         return current_user
+    return dep
+
+
+def require_permission_or_service(permission: str):
+    """Like require_permission, but also accepts the AI pipeline's X-Service-Token.
+
+    Returns None when the caller authenticated as the service.
+    """
+    async def dep(
+        request: Request,
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        db: AsyncSession = Depends(get_db),
+    ) -> User | None:
+        service_token = request.headers.get("X-Service-Token")
+        if service_token and settings.ai_service_token and hmac.compare_digest(
+            service_token, settings.ai_service_token
+        ):
+            return None
+        user = await get_current_user(request, credentials, db)
+        if permission not in _get_user_permissions(user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient permissions: {permission} required",
+            )
+        return user
     return dep

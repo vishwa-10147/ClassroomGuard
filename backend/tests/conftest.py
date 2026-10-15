@@ -1,8 +1,11 @@
 
+import os
+
 import httpx
 import pytest_asyncio
 
-BASE_URL = "http://localhost:8000"
+# These are HTTP tests against a running API (see the CI test job)
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:8000")
 
 
 @pytest_asyncio.fixture

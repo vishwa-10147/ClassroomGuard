@@ -13,22 +13,25 @@ from backend.app.core.security import (
 from backend.app.models.organization import Organization
 from backend.app.models.refresh_token import RefreshToken
 from backend.app.models.user import User
-from backend.app.services.integrations.email import send_alert_email
-async def send_auth_email(to_email: str, subject: str, body: str): pass
 from backend.app.schemas.auth import (
     ForgotPasswordRequest,
-    ResetPasswordRequest,
-    Verify2FARequest,
     LoginRequest,
     LoginResponse,
     RefreshRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserResponse,
+    Verify2FARequest,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def send_auth_email(to_email: str, subject: str, body: str):
+    # TODO: not implemented - password reset emails are never sent
+    pass
 
 
 class RegisterRequest(BaseModel):

@@ -9,6 +9,18 @@ from ultralytics import YOLO
 logger = logging.getLogger(__name__)
 
 
+def resolve_device(device):
+    """Fall back to CPU when a CUDA device is configured but no GPU is available."""
+    if str(device).lower() == "cpu":
+        return "cpu"
+    import torch
+
+    if not torch.cuda.is_available():
+        logger.warning("CUDA device %s configured but no GPU available - running on CPU", device)
+        return "cpu"
+    return device
+
+
 class YOLODetector:
     def __init__(self, config: dict):
         self.config = config["models"]["detection"]
@@ -19,7 +31,7 @@ class YOLODetector:
     def _load_model(self):
         weights = self.config["weights"]
         fallback = self.config.get("fallback_weights", "yolo26m.pt")  # YOLO26m default
-        device = self.config["device"]
+        self.config["device"] = resolve_device(self.config["device"])
 
         # Prefer TensorRT engine if available
         engine_path = str(Path(weights).with_suffix(".engine"))
@@ -34,7 +46,11 @@ class YOLODetector:
             self.model = YOLO(fallback)
 
         self.class_names = self.model.names
-        logger.info("Detection model loaded. Classes: %s", list(self.class_names.values()))
+        arch = getattr(getattr(self.model, "model", None), "yaml", {}) or {}
+        logger.info(
+            "Detection model loaded (architecture: %s). Classes: %s",
+            arch.get("yaml_file", "unknown"), list(self.class_names.values()),
+        )
 
     @staticmethod
     def enhance_shadows(frame: np.ndarray) -> np.ndarray:

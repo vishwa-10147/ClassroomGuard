@@ -70,11 +70,31 @@ jobs:
           JWT_SECRET: ci-test-secret
         run: cd backend && alembic upgrade head
 
-      - name: Run tests
+      - name: Seed test data and start API
         env:
           DATABASE_URL: postgresql+asyncpg://classroomguard:classroomguard_dev@localhost:5432/classroomguard
           JWT_SECRET: ci-test-secret
+          USE_REDIS: "false"
+          RATE_LIMIT_ENABLED: "false"
+        run: |
+          python -m backend.seed_users
+          python -m backend.seed_data
+          nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:8000/api/v1/auth/me && break; sleep 2; done
+
+      - name: Run tests
+        env:
+          TEST_BASE_URL: http://127.0.0.1:8000
         run: cd backend && python -m pytest tests/ -v --tb=short
+
+      - name: Show API log on failure
+        if: failure()
+        run: cat api.log
+
+      - name: Run AI rules tests
+        run: |
+          pip install numpy pytest
+          cd ai && python -m pytest tests/ -v --tb=short
 
       - uses: actions/setup-node@v4
         with:

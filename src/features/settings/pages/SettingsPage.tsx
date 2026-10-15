@@ -67,7 +67,7 @@ export default function SettingsPage() {
   useEffect(() => {
     settingsService
       .get()
-      .then(setSettings)
+      .then((loaded) => setSettings((prev) => ({ ...prev, ...loaded })))
       .catch(() => {})
       .finally(() => setLoading(false));
 
@@ -131,7 +131,7 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       const updated = await settingsService.update(settings);
-      setSettings(updated);
+      setSettings((prev) => ({ ...prev, ...updated }));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {

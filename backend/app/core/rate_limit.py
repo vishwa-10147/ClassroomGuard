@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from backend.app.core.config import settings
 from fastapi import Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -24,6 +25,7 @@ limiter = Limiter(
     key_func=_get_user_id_or_ip,
     default_limits=["60/minute"],
     headers_enabled=True,
+    enabled=settings.rate_limit_enabled,
 )
 
 LOGIN_RATE_LIMIT = "5/minute"
