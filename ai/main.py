@@ -213,8 +213,10 @@ class ClassroomGuard:
 
             # Heartbeat so the web app can show whether detection is running
             if time.time() - last_heartbeat > 30:
-                fps_values = [self.camera_manager.get_fps(c) for c in active_cams]
-                self.alert_system.send_heartbeat(len(active_cams), sum(fps_values) / max(len(fps_values), 1))
+                self.alert_system.send_heartbeat({
+                    c: (self.camera_manager.is_receiving(c), self.camera_manager.get_fps(c))
+                    for c in self.camera_manager.streams
+                })
                 last_heartbeat = time.time()
 
             # Handle OpenCV window keys

@@ -1,30 +1,22 @@
 import { apiClient } from './client';
 import type { Classroom, ClassroomLayout } from '@/types/classroom.types';
 
-interface ClassroomApiResponse {
-  id: string;
-  name: string;
-  building: string;
-  floor: number;
-  room_number: string;
-  total_seats: number;
-  created_at: string;
-  updated_at: string;
-}
+// The API answers in camelCase; snake_case is accepted too for older backends.
+type ClassroomApiResponse = Record<string, any>;
 
-const normalizeClassroom = (
-  classroom: ClassroomApiResponse
-): Classroom => ({
+const pick = (o: Record<string, any>, camel: string, snake: string) => o[camel] ?? o[snake];
+
+const normalizeClassroom = (classroom: ClassroomApiResponse): Classroom => ({
   id: classroom.id,
   name: classroom.name,
   building: classroom.building,
   floor: String(classroom.floor),
-  roomNumber: classroom.room_number,
-  totalSeats: classroom.total_seats,
-  occupiedSeats: 0,
-  activeDetections: 0,
-  createdAt: classroom.created_at,
-  updatedAt: classroom.updated_at,
+  roomNumber: pick(classroom, 'roomNumber', 'room_number'),
+  totalSeats: pick(classroom, 'totalSeats', 'total_seats'),
+  occupiedSeats: pick(classroom, 'occupiedSeats', 'occupied_seats') ?? 0,
+  activeDetections: pick(classroom, 'activeDetections', 'active_detections') ?? 0,
+  createdAt: pick(classroom, 'createdAt', 'created_at'),
+  updatedAt: pick(classroom, 'updatedAt', 'updated_at'),
 });
 
 export const classroomService = {

@@ -130,11 +130,25 @@ class AlertSystem:
         except queue.Full:
             logger.error("Backend push queue full - dropping alert %s", payload["eventType"])
 
-    def send_heartbeat(self, cameras: int, fps: float) -> None:
-        """Tell the API this engine is alive (shown as AI Online/Offline in the web app)."""
+    def send_heartbeat(self, camera_states: dict[int, tuple[bool, float]]) -> None:
+        """Tell the API this engine is alive and which cameras deliver video.
+
+        camera_states: AI camera index -> (receiving frames, fps). Shown as AI Online/Offline and
+        as each camera's online/offline status in the web app.
+        """
         if not self.service_token:
             return
-        payload = {"engine": socket.gethostname(), "cameras": cameras, "fps": fps}
+        cameras = [
+            {"id": self._backend_ids.get(cid, (f"cam-{cid + 1:03d}", None))[0], "online": online, "fps": round(fps, 1)}
+            for cid, (online, fps) in camera_states.items()
+        ]
+        online = [c for c in cameras if c["online"]]
+        payload = {
+            "engine": socket.gethostname(),
+            "cameras": len(online),
+            "fps": round(sum(c["fps"] for c in online) / max(len(online), 1), 1),
+            "camera_status": cameras,
+        }
         try:
             self._push_queue.put_nowait((self.heartbeat_url, payload))
         except queue.Full:

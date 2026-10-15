@@ -1,5 +1,7 @@
+from datetime import datetime
 
 from backend.app.api.dependencies import get_db, require_permission, require_permission_or_service
+from backend.app.core.websocket import manager
 from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
 from backend.app.models.detection_event import DetectionEvent
@@ -8,6 +10,7 @@ from backend.app.schemas.event import (
     DetectionEventListResponse,
     DetectionEventResponse,
 )
+from backend.app.services.alerting import ALERTING_SEVERITIES, EVENT_TITLES, create_alert_and_notify
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,6 +61,35 @@ async def create_event(
     db.add(event)
     await db.commit()
     await db.refresh(event)
+
+    classroom = await db.get(Classroom, camera.classroom_id)
+    room = classroom.name if classroom else "unknown room"
+    message = metadata_json.get("message") if isinstance(metadata_json, dict) else None
+    await manager.broadcast({
+        "type": "detection",
+        "payload": {
+            "id": event.id,
+            "type": event.event_type,
+            "severity": event.severity,
+            "cameraName": camera.name,
+            "classroomName": room,
+            "message": message,
+        },
+    })
+
+    # Cheating cues from the AI become alerts so invigilators are notified in real time
+    if event.severity in ALERTING_SEVERITIES:
+        title = EVENT_TITLES.get(event.event_type, event.event_type.replace("_", " ").capitalize())
+        await create_alert_and_notify(
+            db,
+            title=f"{title} - {room}",
+            description=f"{message or title} (camera: {camera.name})",
+            severity=event.severity,
+            classroom_id=camera.classroom_id,
+            camera_id=camera.id,
+            event_id=event.id,
+            organization_id=camera.organization_id,
+        )
     return event
 
 
@@ -75,6 +107,7 @@ async def list_events(
     camera_id: str | None = Query(None),
     type: str | None = Query(None),
     severity: str | None = Query(None),
+    since: datetime | None = Query(None, description="Only events at or after this time (ISO 8601)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -99,6 +132,9 @@ async def list_events(
     if severity:
         base = base.where(DetectionEvent.severity == severity)
         count_query = count_query.where(DetectionEvent.severity == severity)
+    if since:
+        base = base.where(DetectionEvent.timestamp >= since)
+        count_query = count_query.where(DetectionEvent.timestamp >= since)
 
     total = await db.scalar(count_query) or 0
     query = base.order_by(desc(DetectionEvent.timestamp)).offset((page - 1) * page_size).limit(page_size)

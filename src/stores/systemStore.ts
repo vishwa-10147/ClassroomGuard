@@ -4,6 +4,7 @@ import type { Camera } from '@/types/camera.types';
 
 interface SystemState {
   aiStatus: 'online' | 'degraded' | 'offline';
+  aiEnginesOnline: number;
   camerasOnline: number;
   camerasTotal: number;
   activeAlerts: number;
@@ -20,6 +21,7 @@ interface SystemState {
 
 export const useSystemStore = create<SystemState>((set) => ({
   aiStatus: 'offline',
+  aiEnginesOnline: 0,
   camerasOnline: 0,
   camerasTotal: 0,
   activeAlerts: 0,
@@ -32,18 +34,25 @@ export const useSystemStore = create<SystemState>((set) => ({
   setWsConnected: (connected) => set({ wsConnected: connected }),
   fetchAiStatus: async () => {
     try {
-      const res = await apiClient.get<{ ai: 'online' | 'offline' }>('/status');
-      set({ aiStatus: res.data.ai === 'online' ? 'online' : 'offline' });
+      const res = await apiClient.get<{ ai: 'online' | 'offline'; aiEngines?: { seconds_ago: number }[] }>('/status');
+      set({
+        aiStatus: res.data.ai === 'online' ? 'online' : 'offline',
+        aiEnginesOnline: (res.data.aiEngines ?? []).filter((e) => e.seconds_ago <= 90).length,
+      });
     } catch {
-      set({ aiStatus: 'offline' });
+      set({ aiStatus: 'offline', aiEnginesOnline: 0 });
     }
   },
   fetchRealData: async () => {
     try {
-      const [camerasRes, alertCountRes, eventsRes] = await Promise.all([
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const since = startOfToday.toISOString();
+      const [camerasRes, alertCountRes, eventsRes, phonesRes] = await Promise.all([
         apiClient.get('/cameras'),
         apiClient.get('/alerts/count'),
-        apiClient.get('/events', { params: { page: 1, page_size: 100 } }),
+        apiClient.get('/events', { params: { page: 1, page_size: 1, since } }),
+        apiClient.get('/events', { params: { page: 1, page_size: 1, since, type: 'PHONE_USAGE' } }),
       ]);
 
       const cameras = camerasRes.data;
@@ -56,21 +65,12 @@ export const useSystemStore = create<SystemState>((set) => ({
 
       const eventsData = eventsRes.data;
       const eventsTotal = eventsData?.total ?? 0;
-      const eventsItems = Array.isArray(eventsData)
-        ? eventsData
-        : eventsData?.items || eventsData?.data || [];
-
-      const uniqueTrackers = new Set<string>();
-      for (const ev of eventsItems) {
-        if (ev.trackerId) uniqueTrackers.add(ev.trackerId);
-      }
-
       set({
         camerasOnline: onlineCameras,
         camerasTotal: totalCameras,
         activeAlerts: alertCounts.active ?? 0,
         totalDetectionsToday: eventsTotal,
-        uniquePeopleDetected: uniqueTrackers.size || eventsTotal,
+        uniquePeopleDetected: phonesRes.data?.total ?? 0,
         lastUpdated: new Date().toISOString(),
       });
     } catch {

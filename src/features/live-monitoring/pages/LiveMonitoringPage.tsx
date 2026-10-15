@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Camera, LayoutGrid, Maximize, Settings2, AlertTriangle,
-  Users, Smartphone, Clock, Filter, Activity, Loader2, WifiOff, RefreshCw,
+  Users, Smartphone, Clock, Filter, Activity, Loader2, WifiOff,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { cameraService } from '@/services/api/cameraService';
@@ -13,7 +13,7 @@ import type { Classroom } from '@/types/classroom.types';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPermission } from '@/utils/permissions';
 import { PERMISSIONS } from '@/utils/constants';
-import { authedStreamUrl, useAuthedImage } from '@/hooks/useAuthedImage';
+import { authedStreamUrl } from '@/hooks/useAuthedImage';
 
 const Card = ({ children, className }: any) => (
   <div className={cn('bg-cg-bg-secondary border border-cg-border-default rounded-lg shadow-sm', className)}>
@@ -61,34 +61,6 @@ function MjpegStream({ cameraId, className }: { cameraId: string; className?: st
       className={cn('object-cover w-full h-full', className)}
       onError={() => setError(true)}
     />
-  );
-}
-
-function SnapshotView({ cameraId, className }: { cameraId: string; className?: string }) {
-  const [key, setKey] = useState(0);
-  const { src, error } = useAuthedImage(`/cameras/${cameraId}/snapshot`, key);
-
-  if (error) {
-    return (
-      <div className={cn('flex flex-col items-center justify-center bg-cg-bg-video text-cg-text-tertiary', className)}>
-        <WifiOff className="h-8 w-8 mb-2 opacity-40" />
-        <span className="text-xs">Snapshot unavailable</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn('relative', className)}>
-      {src && <img src={src} alt={`Camera ${cameraId}`} className="object-cover w-full h-full" />}
-      <button
-        onClick={(e) => { e.stopPropagation(); setKey((k) => k + 1); }}
-        className="absolute top-2 right-2 rounded bg-black/50 p-1 text-white hover:bg-black/70 transition-colors"
-        title="Refresh snapshot"
-        aria-label="Refresh snapshot"
-      >
-        <RefreshCw className="h-3 w-3" />
-      </button>
-    </div>
   );
 }
 
@@ -229,10 +201,13 @@ export default function LiveMonitoringPage() {
               >
                 <div className="relative flex-1 bg-cg-bg-video">
                   {isOnline ? (
-                    isOnline && camera.streamUrl ? (
+                    camera.streamUrl ? (
                       <MjpegStream cameraId={camera.id} />
                     ) : (
-                      <SnapshotView cameraId={camera.id} />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center text-cg-text-tertiary">
+                        <Activity className="h-8 w-8 mb-2 opacity-40" />
+                        <span className="text-xs">AI is monitoring this camera. Add its stream URL on the Cameras page to watch video here.</span>
+                      </div>
                     )
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-cg-text-tertiary">
@@ -252,7 +227,7 @@ export default function LiveMonitoringPage() {
                     )}
                   </div>
 
-                  {isOnline && (
+                  {isOnline && camera.streamUrl && (
                     <div className="absolute top-2 right-2 flex items-center gap-1.5 rounded bg-red-600/90 px-1.5 py-0.5">
                       <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
                       <span className="text-[10px] font-semibold text-white uppercase">Live</span>
@@ -279,8 +254,15 @@ export default function LiveMonitoringPage() {
           {/* Video Area */}
           <div className="lg:w-2/3 xl:w-3/4 flex flex-col space-y-4">
             <div className="relative bg-cg-bg-video rounded-lg overflow-hidden flex-1 flex items-center justify-center border border-cg-border-default shadow-lg min-h-[300px]">
-              {selectedCamera && selectedCamera.status === 'online' ? (
+              {selectedCamera && selectedCamera.status === 'online' && selectedCamera.streamUrl ? (
                 <MjpegStream cameraId={selectedCamera.id} className="w-full h-full" />
+              ) : selectedCamera && selectedCamera.status === 'online' ? (
+                <div className="flex flex-col items-center px-6 text-center">
+                  <Activity className="w-12 h-12 text-cg-text-tertiary/40" />
+                  <p className="text-cg-text-tertiary mt-4 text-sm">
+                    AI is monitoring {selectedCamera.name}. Add its stream URL on the Cameras page to watch video here.
+                  </p>
+                </div>
               ) : (
                 <div className="flex flex-col items-center">
                   <WifiOff className="w-16 h-16 text-cg-text-tertiary/30" />
@@ -299,7 +281,7 @@ export default function LiveMonitoringPage() {
                 <Badge variant="default" className="font-mono">{selectedCamera?.resolution}</Badge>
               </div>
 
-              {selectedCamera?.status === 'online' && (
+              {selectedCamera?.status === 'online' && selectedCamera.streamUrl && (
                 <div className="absolute top-4 right-4 flex items-center gap-1.5 rounded bg-red-600/90 px-2 py-1">
                   <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
                   <span className="text-xs font-semibold text-white uppercase">Live</span>

@@ -40,6 +40,10 @@ celery_app.conf.beat_schedule = {
         "task": "backend.app.tasks.scheduled.scheduled_retention_enforcement",
         "schedule": crontab(hour=2, minute=0),
     },
+    "cameras-offline-check": {
+        "task": "backend.app.tasks.scheduled.scheduled_mark_stale_cameras_offline",
+        "schedule": 60.0,
+    },
     "evidence-cleanup-daily": {
         "task": "backend.app.tasks.scheduled.scheduled_cleanup_old_evidence",
         "schedule": crontab(hour=3, minute=0),

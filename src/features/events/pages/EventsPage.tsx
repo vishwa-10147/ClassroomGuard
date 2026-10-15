@@ -1,8 +1,11 @@
+import { useLiveRefresh } from '@/components/providers/RealTimeProvider';
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { apiClient } from '@/services/api/client';
+import { AuthedImage } from '@/components/shared/AuthedImage';
 import { eventService } from '@/services/api/eventService';
 import type { DetectionEvent } from '@/types/event.types';
-import { Filter, Search, Smartphone, Clock, MapPin, Video, AlertTriangle, Maximize2, Loader2 } from 'lucide-react';
+import { Filter, Search, Smartphone, Clock, MapPin, Video, AlertTriangle, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 const Badge = ({ children, variant = 'default', className }: any) => {
@@ -25,15 +28,41 @@ export default function EventsPage() {
   const { id: routeEventId } = useParams();
   const navigate = useNavigate();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(routeEventId ?? null);
+  const [raising, setRaising] = useState(false);
 
-  useEffect(() => {
+  /** Evidence frame saved by the AI engine for this detection (file name only). */
+  const evidenceFile = (event: DetectionEvent): string | null => {
+    const path = event.metadata?.evidence_path;
+    return typeof path === 'string' && path ? path.split(/[\\/]/).pop() ?? null : null;
+  };
+
+  const raiseAlert = async (event: DetectionEvent) => {
+    setRaising(true);
+    try {
+      await apiClient.post('/alerts', {
+        title: `${String(event.type).replace(/_/g, ' ').toLowerCase()} - ${event.classroomName ?? 'classroom'}`,
+        description: (event.metadata?.message as string) || 'Raised from a detection event',
+        severity: event.severity,
+        classroomId: event.classroomId,
+        cameraId: event.cameraId,
+        eventId: event.id,
+      });
+    } finally {
+      setRaising(false);
+    }
+  };
+
+  const loadEvents = () => {
     eventService.getRecent(50)
       .then((data) => {
         setEvents(data);
         setSelectedEventId((current) => current ?? data[0]?.id ?? null);
       })
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(loadEvents, []);
+  useLiveRefresh(['detection'], loadEvents);
 
   // Follow /events/:id links, fetching the event if it is outside the recent window
   useEffect(() => {
@@ -94,7 +123,7 @@ export default function EventsPage() {
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2">
-                    {event.type.includes('phone') ? <Smartphone className="w-4 h-4 text-gray-500" /> : <AlertTriangle className="w-4 h-4 text-gray-500" />}
+                    {String(event.type).toLowerCase().includes('phone') ? <Smartphone className="w-4 h-4 text-gray-500" /> : <AlertTriangle className="w-4 h-4 text-gray-500" />}
                     <span className="font-medium text-sm text-gray-900">{event.type}</span>
                   </div>
                   <Badge variant={event.severity}>{event.severity}</Badge>
@@ -121,25 +150,45 @@ export default function EventsPage() {
                   <p className="text-xs text-gray-500 font-mono mt-1">ID: {selectedEvent.id}</p>
                 </div>
                 <div className="flex gap-2">
-                  <button className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                    Acknowledge
-                  </button>
-                  <button className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
-                    Create Alert
-                  </button>
+                  {['high', 'medium', 'critical'].includes(String(selectedEvent.severity).toLowerCase()) ? (
+                    // Medium/high detections raise an alert automatically
+                    <Link
+                      to="/alerts"
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                    >
+                      View alerts
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => raiseAlert(selectedEvent)}
+                      disabled={raising}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+                    >
+                      Raise alert
+                    </button>
+                  )}
                 </div>
               </div>
               
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="bg-gray-900 rounded-lg aspect-video relative mb-6 flex items-center justify-center overflow-hidden border border-gray-300">
-                   <Video className="w-16 h-16 text-gray-700" />
-                   <div className="absolute inset-0 border-2 border-red-500 rounded-lg m-16 opacity-50 flex items-start p-2">
-                      <span className="bg-red-500 text-white text-xs px-1 rounded">Detection Bounding Box</span>
-                   </div>
-                   <button className="absolute bottom-4 right-4 p-2 bg-black/50 text-white rounded hover:bg-black/70">
-                     <Maximize2 className="w-4 h-4" />
-                   </button>
+                  {evidenceFile(selectedEvent) ? (
+                    <AuthedImage
+                      src={`/api/v1/evidence/frames/${evidenceFile(selectedEvent)}`}
+                      alt="Annotated evidence frame"
+                      className="absolute inset-0 w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center text-gray-400">
+                      <Video className="w-12 h-12 mb-2" />
+                      <span className="text-sm">No evidence frame for this detection</span>
+                    </div>
+                  )}
                 </div>
+
+                {typeof selectedEvent.metadata?.message === 'string' && (
+                  <p className="mb-6 text-sm text-gray-700">{selectedEvent.metadata.message as string}</p>
+                )}
 
                 <div className="grid grid-cols-2 gap-6">
                   <div>

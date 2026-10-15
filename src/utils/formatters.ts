@@ -52,3 +52,10 @@ export function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
+
+/** Detection confidence as a percentage; accepts 0-1 fractions or 0-100 values. */
+export function formatConfidence(confidence: number): string {
+  const pct = confidence <= 1 ? confidence * 100 : confidence;
+  return `${Math.round(pct)}%`;
+}
+

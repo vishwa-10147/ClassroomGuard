@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '@/components/providers/RealTimeProvider';
 import { useState, useEffect, useMemo } from 'react';
 import { Image, Filter, ArrowUpDown, Loader2 } from 'lucide-react';
 import { evidenceService } from '@/services/api/evidenceService';
@@ -21,14 +22,17 @@ export default function EvidencePage() {
     source: string;
   }
 
-  useEffect(() => {
+  const load = () => {
     Promise.all([evidenceService.getFrames(), evidenceService.getAlertFrames()])
       .then(([frames, alerts]) => {
         const all = [...frames, ...alerts];
         setItems(all);
       })
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(load, []);
+  useLiveRefresh(['alert', 'detection'], load, 2000);
 
   const filtered = useMemo(() => {
     let result = items;

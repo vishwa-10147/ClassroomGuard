@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -25,7 +27,11 @@ class UserResponse(BaseModel):
     status: str
     avatar: str | None = None
     is_active: bool
+    last_login_at: datetime | None = Field(
+        default=None, validation_alias="last_active_at", serialization_alias="lastLoginAt"
+    )
 
     model_config = {
         "from_attributes": True,
+        "populate_by_name": True,
     }

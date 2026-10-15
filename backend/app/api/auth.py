@@ -171,6 +171,7 @@ async def login(
         expires_at=expires_at,
     )
     db.add(refresh_record)
+    user.last_active_at = datetime.now(UTC)  # shown as "Last active" on the Users page
     await log_audit(
         db, user, "login", "auth",
         new_value={"email": user.email},

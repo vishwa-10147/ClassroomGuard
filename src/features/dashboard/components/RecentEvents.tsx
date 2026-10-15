@@ -1,9 +1,10 @@
+import { useLiveRefresh } from '@/components/providers/RealTimeProvider';
 import { useState, useEffect } from 'react';
 import { cn } from '@/utils/cn';
 import { Badge } from '@/components/ui';
 import { eventService } from '@/services/api/eventService';
 import type { DetectionEvent } from '@/types/event.types';
-import { formatRelativeTime, formatTimestamp } from '@/utils/formatters';
+import { formatConfidence, formatRelativeTime, formatTimestamp } from '@/utils/formatters';
 import { Zap, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -20,11 +21,14 @@ export function RecentEvents() {
   const [events, setEvents] = useState<DetectionEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = () => {
     eventService.getRecent(6)
       .then(setEvents)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(load, []);
+  useLiveRefresh(['detection'], load);
 
   return (
     <div>
@@ -91,7 +95,7 @@ export function RecentEvents() {
                 {event.confidence && (
                   <div className="mt-1 text-2xs text-cg-text-tertiary">
                     <span className="tabular-nums">
-                      {event.confidence.toFixed(1)}%
+                      {formatConfidence(event.confidence)}
                     </span>
                     {event.trackerId && (
                       <span className="ml-2 font-mono">

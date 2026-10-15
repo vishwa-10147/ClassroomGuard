@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '@/components/providers/RealTimeProvider';
 import { useState, useEffect, useCallback } from 'react';
 import { cn } from '@/utils/cn';
 import { Badge, Button } from '@/components/ui';
@@ -20,6 +21,7 @@ export function ActiveAlerts() {
   useEffect(() => {
     fetchAlerts();
   }, [fetchAlerts]);
+  useLiveRefresh(['alert'], fetchAlerts);
 
   const handleAcknowledge = async (id: string) => {
     await alertService.acknowledge(id);
@@ -37,7 +39,7 @@ export function ActiveAlerts() {
           </h3>
           {displayAlerts.length > 0 && (
             <span className="inline-flex items-center justify-center rounded-full bg-cg-severity-critical-bg px-2 py-0.5 text-2xs font-medium text-cg-severity-critical">
-              {displayAlerts.length}
+              {alerts.length >= 50 ? '50+' : alerts.length}
             </span>
           )}
         </div>

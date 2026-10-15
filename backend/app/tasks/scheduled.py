@@ -43,3 +43,33 @@ def scheduled_weekly_report() -> str:
     from backend.app.tasks.alert_tasks import generate_report
     # Send report to system admin
     return generate_report.delay(report_type="weekly", params={"email": "admin@classroomguard.local"}).id
+
+
+async def _mark_stale_cameras_offline() -> int:
+    from datetime import UTC, datetime, timedelta
+
+    from backend.app.core.database import AsyncSessionLocal
+    from backend.app.models.camera import Camera
+    from sqlalchemy import update
+
+    cutoff = datetime.now(UTC) - timedelta(seconds=CAMERA_STALE_AFTER_S)
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            update(Camera)
+            .where(Camera.status == "online", Camera.updated_at < cutoff)
+            .values(status="offline", fps=0, ai_processing=False)
+        )
+        await db.commit()
+        return result.rowcount or 0
+
+
+CAMERA_STALE_AFTER_S = 120
+
+
+@celery_app.task
+def scheduled_mark_stale_cameras_offline() -> int:
+    """Cameras whose AI engine stopped reporting them go offline (heartbeats come every 30 s)."""
+    from backend.app.tasks.retention_tasks import _run_async
+
+    return _run_async(_mark_stale_cameras_offline())
+

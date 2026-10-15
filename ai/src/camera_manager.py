@@ -32,6 +32,7 @@ class CameraStream:
         self.running = False
         self.fps_actual = 0.0
         self.frame_count = 0
+        self.last_frame_at = 0.0  # time of the last good frame (camera health)
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
         self._cap: Optional[cv2.VideoCapture] = None
@@ -85,12 +86,17 @@ class CameraStream:
             if is_corrupt_frame(frame):
                 continue
 
+            now = time.time()
             with self._lock:
                 self.frame = frame
                 self.frame_count += 1
+                # Delivered frame rate (smoothed), not the time one read took
+                if self.last_frame_at:
+                    instant = 1.0 / max(now - self.last_frame_at, 1e-6)
+                    self.fps_actual = instant if not self.fps_actual else 0.9 * self.fps_actual + 0.1 * instant
+                self.last_frame_at = now
 
             elapsed = time.time() - t0
-            self.fps_actual = 1.0 / max(elapsed, 1e-6)
 
             sleep_time = frame_interval - elapsed
             if sleep_time > 0:
@@ -158,6 +164,11 @@ class CameraManager:
     def get_fps(self, camera_id: int) -> float:
         stream = self.streams.get(camera_id)
         return stream.fps_actual if stream else 0.0
+
+    def is_receiving(self, camera_id: int, within_s: float = 10.0) -> bool:
+        """True if the camera delivered a good frame in the last `within_s` seconds."""
+        stream = self.streams.get(camera_id)
+        return bool(stream and time.time() - stream.last_frame_at < within_s)
 
     def get_active_cameras(self) -> list[int]:
         return [cam_id for cam_id, s in self.streams.items() if s.is_alive]
