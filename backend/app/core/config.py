@@ -23,9 +23,18 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    frontend_url: str = "http://localhost:5173"
+    frontend_url: str = "http://localhost:3000"  # base URL used in password-reset links
     allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     storage_path: str = "./storage"
+
+    # Outgoing email (password resets, alert emails). Empty SMTP_HOST = log only, nothing sent.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "ClassroomGuard <no-reply@localhost>"
+    smtp_starttls: bool = True  # port 587; set false and SMTP_SSL=true for port 465
+    smtp_ssl: bool = False
 
     # Disable only for automated test runs that log in many times per minute
     rate_limit_enabled: bool = True

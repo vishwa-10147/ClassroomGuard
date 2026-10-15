@@ -14,7 +14,8 @@ build/
 # === Environment ===
 .env
 .env.local
-.env.*.local
+.env.*
+!.env.example
 
 # === IDE ===
 .vscode/
@@ -95,3 +96,8 @@ anigravity_skills/
 anigravity_skills/
 .antigravity/
 claude-code-best-practice-main/
+
+# Caddy runtime state (certificates, internal CA)
+deploy/caddy/data/
+deploy/caddy/config/
+backups/

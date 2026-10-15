@@ -1,12 +1,16 @@
-from datetime import UTC, datetime
+import secrets
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from backend.app.api.dependencies import get_current_user, get_db
 from backend.app.core.audit import log_audit
+from backend.app.core.config import settings
+from backend.app.core.mailer import send_email
 from backend.app.core.rate_limit import LOGIN_RATE_LIMIT, limiter
 from backend.app.core.security import (
     create_access_token,
     create_refresh_token,
+    hash_password,
     hash_refresh_token,
     verify_password,
 )
@@ -25,13 +29,15 @@ from backend.app.schemas.auth import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+RESET_TOKEN_HOURS = 1
 
-async def send_auth_email(to_email: str, subject: str, body: str):
-    # TODO: not implemented - password reset emails are never sent
-    pass
+
+def _hash_reset_token(token: str) -> str:
+    # Only the hash is stored, so a database leak does not expose usable reset links
+    return hash_refresh_token(token)
 
 
 class RegisterRequest(BaseModel):
@@ -284,40 +290,53 @@ async def me(
     return current_user
 
 @router.post("/forgot-password")
+@limiter.limit(LOGIN_RATE_LIMIT)
 async def forgot_password(
     request: Request,
     body: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(User).where(User.email == body.email))
+    result = await db.execute(select(User).where(User.email == body.email, User.is_active.is_(True)))
     user = result.scalar_one_or_none()
     if user:
-        token = str(uuid4())
-        user.reset_password_token = token
-        import datetime as dt
-        user.reset_password_expires_at = dt.datetime.now(UTC) + dt.timedelta(hours=1)
+        token = secrets.token_urlsafe(32)
+        user.reset_password_token = _hash_reset_token(token)
+        user.reset_password_expires_at = datetime.now(UTC) + timedelta(hours=RESET_TOKEN_HOURS)
         await db.commit()
-        await send_auth_email(user.email, "Password Reset", f"Token: {token}")
+        link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={token}"
+        await send_email(
+            user.email,
+            "Reset your ClassroomGuard password",
+            f"Hello {user.name},\n\n"
+            f"Use this link within {RESET_TOKEN_HOURS} hour to choose a new password:\n{link}\n\n"
+            "If you did not ask for this, ignore this email; your password is unchanged.",
+        )
+    # Same answer either way, so the endpoint cannot be used to discover accounts
     return {"message": "If an account exists, a reset email was sent."}
 
+
 @router.post("/reset-password")
+@limiter.limit(LOGIN_RATE_LIMIT)
 async def reset_password(
     request: Request,
     body: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    import datetime as dt
-    result = await db.execute(select(User).where(User.reset_password_token == body.token))
+    result = await db.execute(select(User).where(User.reset_password_token == _hash_reset_token(body.token)))
     user = result.scalar_one_or_none()
-    if not user or user.reset_password_expires_at < dt.datetime.now(UTC):
+    if not user or not user.reset_password_expires_at or user.reset_password_expires_at < datetime.now(UTC):
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    from backend.app.core.security import hash_password
     user.password_hash = hash_password(body.new_password)
     user.reset_password_token = None
     user.reset_password_expires_at = None
+    # Sign the account out everywhere
+    await db.execute(
+        update(RefreshToken).where(RefreshToken.user_id == user.id).values(revoked=True)
+    )
     await log_audit(db, user, "reset_password", "auth", request=request)
     await db.commit()
     return {"message": "Password reset successfully."}
+
 
 @router.post("/verify-2fa")
 async def verify_2fa(

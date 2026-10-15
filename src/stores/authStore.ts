@@ -4,6 +4,7 @@ import type { AuthUser } from '@/types/user.types';
 
 interface LoginResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
   user: {
     id: string;
@@ -44,9 +45,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       );
 
-      const { access_token, user } = response.data;
+      const { access_token, refresh_token, user } = response.data;
 
       localStorage.setItem('token', access_token);
+      localStorage.setItem('refresh_token', refresh_token);
 
       const authUser: AuthUser = {
         id: user.id,
@@ -79,7 +81,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
+    // Revoke the refresh token server-side (best effort; the session ends locally either way)
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (refreshToken && localStorage.getItem('token')) {
+      apiClient.post('/auth/logout', { refresh_token: refreshToken }).catch(() => undefined);
+    }
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
 
     set({
       user: null,
