@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import queue
+import socket
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -24,20 +25,22 @@ class AlertSystem:
         self.snapshot_dir = Path(alert_cfg.get("snapshot_dir", "logs/snapshots"))
         backend_base = os.environ.get("BACKEND_URL", "http://backend:8000").rstrip("/")
         self.backend_url = f"{backend_base}/api/v1/events"
+        self.heartbeat_url = f"{backend_base}/api/v1/ai/heartbeat"
         self.service_token = os.environ.get("AI_SERVICE_TOKEN", "")
         if not self.service_token:
             logger.warning("AI_SERVICE_TOKEN not set - alerts will not be pushed to the backend")
 
-        # AI camera index -> backend camera/classroom IDs (per-camera config overrides the demo defaults)
-        default_cams = {0: "cam-001", 1: "cam-002", 2: "cam-003", 3: "cam-004", 4: "cam-005"}
-        default_rooms = {0: "cls-001", 1: "cls-001", 2: "cls-002", 3: "cls-002", 4: "cls-003"}
-        self._backend_ids: dict[int, tuple[str, str]] = {}
+        # AI camera index -> the Camera ID entered for that camera in the web app (Cameras page).
+        # The API derives the classroom from the camera.
+        self._backend_ids: dict[int, tuple[str, str | None]] = {}
         for cam in config.get("cameras", []):
-            cid = cam["id"]
-            self._backend_ids[cid] = (
-                cam.get("backend_camera_id", default_cams.get(cid, "cam-001")),
-                cam.get("backend_classroom_id", default_rooms.get(cid, "cls-001")),
-            )
+            backend_id = cam.get("backend_camera_id")
+            if not backend_id:
+                backend_id = f"cam-{cam['id'] + 1:03d}"
+                logger.warning(
+                    "Camera %s has no backend_camera_id in the config - sending '%s'", cam["id"], backend_id
+                )
+            self._backend_ids[cam["id"]] = (backend_id, cam.get("backend_classroom_id"))
 
         # Push off the inference loop so a slow/down backend never stalls detection
         self._push_queue: queue.Queue = queue.Queue(maxsize=500)
@@ -111,31 +114,42 @@ class AlertSystem:
         if not self.service_token:
             return
         cid = alert.get("camera_id", 0)
-        camera_id, classroom_id = self._backend_ids.get(cid, ("cam-001", "cls-001"))
+        camera_id, classroom_id = self._backend_ids.get(cid, (f"cam-{cid + 1:03d}", None))
         payload = {
             "eventType": str(alert.get("alert_type")).upper().replace(" ", "_"),
             "severity": str(alert.get("severity", "MEDIUM")).lower(),
-            "classroomId": classroom_id,
             "cameraId": camera_id,
             "trackerId": alert.get("track_id"),
             "confidence": alert.get("confidence", 0.9),
             "metadata": {"message": alert.get("message"), "evidence_path": alert.get("evidence_path")},
         }
+        if classroom_id:
+            payload["classroomId"] = classroom_id
         try:
-            self._push_queue.put_nowait(payload)
+            self._push_queue.put_nowait((self.backend_url, payload))
         except queue.Full:
             logger.error("Backend push queue full - dropping alert %s", payload["eventType"])
+
+    def send_heartbeat(self, cameras: int, fps: float) -> None:
+        """Tell the API this engine is alive (shown as AI Online/Offline in the web app)."""
+        if not self.service_token:
+            return
+        payload = {"engine": socket.gethostname(), "cameras": cameras, "fps": fps}
+        try:
+            self._push_queue.put_nowait((self.heartbeat_url, payload))
+        except queue.Full:
+            pass
 
     def _push_worker(self):
         headers = {"X-Service-Token": self.service_token}
         while True:
-            payload = self._push_queue.get()
+            url, payload = self._push_queue.get()
             try:
-                resp = requests.post(self.backend_url, json=payload, headers=headers, timeout=5)
-                if resp.status_code not in (200, 201):
-                    logger.error("Failed to push alert to backend: %s %s", resp.status_code, resp.text)
+                resp = requests.post(url, json=payload, headers=headers, timeout=5)
+                if resp.status_code not in (200, 201, 204):
+                    logger.error("Backend rejected %s: %s %s", url.rsplit("/", 1)[-1], resp.status_code, resp.text)
             except Exception as e:
-                logger.error("Exception pushing alert to backend: %s", e)
+                logger.error("Exception pushing to backend: %s", e)
 
     def _write_log(self, alert: dict):
         try:

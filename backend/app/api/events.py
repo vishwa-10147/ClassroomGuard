@@ -9,7 +9,7 @@ from backend.app.schemas.event import (
     DetectionEventResponse,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/events", tags=["Events"])
@@ -32,11 +32,23 @@ async def create_event(
         else:
             metadata_json = body.metadata
 
+    # The AI engine may send the camera's internal id or the code staff gave it in the web app;
+    # the classroom always comes from the camera so the two can never disagree.
+    camera = (await db.execute(
+        select(Camera).where(or_(Camera.id == body.camera_id, Camera.camera_id == body.camera_id))
+    )).scalar_one_or_none()
+    if camera is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown camera '{body.camera_id}'. Add it under Cameras and use its Camera ID in the AI config.",
+        )
+
     event = DetectionEvent(
         event_type=body.event_type,
         severity=body.severity,
-        classroom_id=body.classroom_id,
-        camera_id=body.camera_id,
+        classroom_id=camera.classroom_id,
+        camera_id=camera.id,
+        organization_id=camera.organization_id,
         seat_id=body.seat_id,
         confidence=body.confidence,
         tracker_id=body.tracker_id,

@@ -293,6 +293,7 @@ async def me(
 @limiter.limit(LOGIN_RATE_LIMIT)
 async def forgot_password(
     request: Request,
+    response: Response,  # required by the rate limiter to set its headers
     body: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):
@@ -319,6 +320,7 @@ async def forgot_password(
 @limiter.limit(LOGIN_RATE_LIMIT)
 async def reset_password(
     request: Request,
+    response: Response,  # required by the rate limiter to set its headers
     body: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):

@@ -97,7 +97,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      DB_NULL_POOL: "true"
     volumes:
       - ./storage:/app/storage
     networks: [classguard-net]
@@ -112,7 +114,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      DB_NULL_POOL: "true"
     networks: [classguard-net]
     healthcheck:
       disable: true
@@ -135,6 +139,7 @@ services:
 
   ai:
     profiles: ["ai"]
+    hostname: ${AI_ENGINE_NAME:-classroomguard-ai}   # shown on the status endpoint
     build:
       context: ./ai
       dockerfile: Dockerfile

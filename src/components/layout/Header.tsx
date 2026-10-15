@@ -16,7 +16,14 @@ export function Header() {
   const location = useLocation();
   const { setSidebarMobileOpen, notificationOpen, setNotificationOpen, userMenuOpen, setUserMenuOpen } = useUiStore();
   const { unreadCount, fetchNotifications } = useNotificationStore();
-  const { aiStatus } = useSystemStore();
+  const { aiStatus, fetchAiStatus } = useSystemStore();
+
+  // AI engines send a heartbeat every 30 s; poll so a stopped engine shows as Offline
+  useEffect(() => {
+    fetchAiStatus();
+    const timer = window.setInterval(fetchAiStatus, 30_000);
+    return () => window.clearInterval(timer);
+  }, [fetchAiStatus]);
   const { user } = useAuthStore();
   const { open: openCommand } = useCommandStore();
 

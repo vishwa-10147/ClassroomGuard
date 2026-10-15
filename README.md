@@ -75,6 +75,8 @@ Model, data and evaluation details: [ai/README.md](ai/README.md).
 
 ## Quick start (Docker)
 
+For a college server, use the installer instead: see [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md).
+
 Requirements: Docker with Compose v2. For the AI engine, an NVIDIA GPU with a recent driver and
 the NVIDIA Container Toolkit (Docker Desktop with WSL 2 on Windows).
 
@@ -145,6 +147,8 @@ All services read settings from environment variables (`.env` for Docker Compose
 | `ALLOWED_ORIGINS` | – | JSON list of browser origins allowed by CORS |
 | `DATABASE_URL`, `REDIS_URL` | – | External PostgreSQL / Redis (e.g. RDS and ElastiCache) |
 | `FRONTEND_PORT` | – | Host port for the web app (default 3000) |
+| `SITE_ADDRESS`, `CADDY_TLS` | on-prem | Address and certificate for the HTTPS overlay |
+| `SMTP_HOST` … `SMTP_FROM` | – | Mail server for password resets and alert emails |
 
 AI behaviour (cameras, thresholds, rule timings, whether calculators are allowed) lives in
 `ai/config_exam.yaml` and `ai/config.yaml`.
@@ -165,10 +169,13 @@ for test runs. CI runs all of the above on every push.
 
 ## Deployment
 
-- **AWS:** step-by-step guide in [docs/DEPLOY_AWS.md](docs/DEPLOY_AWS.md) (EC2 GPU instance, RDS,
-  ElastiCache, ECR, ALB with TLS, CloudWatch). Pushes to `main` deploy automatically once the
-  repository variables are set.
-- **Single server:** `docker compose up -d` behind any TLS-terminating reverse proxy.
+| Target | Guide | One-line summary |
+|---|---|---|
+| **College server (on-premise)** | [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md) | `sudo ./scripts/install.sh`: HTTPS via Caddy, backups, updates, camera setup |
+| **AWS** | [docs/DEPLOY_AWS.md](docs/DEPLOY_AWS.md) | EC2 GPU instance, RDS, ElastiCache, ECR, ALB + TLS, CloudWatch; deploys on push to `main` |
+| Separate AI machine | [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md#9-operations) | `docker compose -f docker-compose.ai-host.yml up -d` |
+
+Operations scripts: `scripts/backup.sh`, `scripts/restore.sh`, `scripts/update.sh`.
 
 ## Security
 
@@ -205,7 +212,11 @@ ClassroomGuard/
 ├── e2e/                     Playwright end-to-end tests
 ├── monitoring/              Prometheus and Grafana configuration
 ├── docs/                    Deployment guides
+├── deploy/caddy/            HTTPS reverse proxy configuration
+├── scripts/                 install, backup, restore, update
 ├── docker-compose.yml       Full stack (profiles: ai, monitoring)
+├── docker-compose.https.yml On-premise HTTPS overlay (Caddy)
+├── docker-compose.ai-host.yml  AI engine on a separate GPU machine
 └── docker-compose.aws.yml   AWS overlay (RDS, ElastiCache, ECR, CloudWatch)
 ```
 

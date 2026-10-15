@@ -86,21 +86,28 @@ def process_alert(self, alert_id: str) -> dict:
 
 @celery_app.task(bind=True, max_retries=2)
 def cleanup_old_evidence(self, days: int = 30) -> dict:
-    """Delete evidence files older than *days* days."""
+    """Delete AI evidence and frame captures older than *days* days.
+
+    Only storage/evidence and storage/frames are touched: uploaded recordings are database
+    records with their own lifecycle and must not disappear from under them.
+    """
     storage = os.environ.get("STORAGE_PATH", "./storage")
     cutoff = datetime.now(UTC) - timedelta(days=days)
     removed = 0
 
-    for root, _dirs, files in os.walk(storage):
-        for fname in files:
-            fpath = os.path.join(root, fname)
-            try:
-                mtime = datetime.fromtimestamp(os.path.getmtime(fpath), tz=UTC)
-                if mtime < cutoff:
-                    os.remove(fpath)
-                    removed += 1
-            except OSError:
-                continue
+    for subdir in ("evidence", "frames"):
+        for root, _dirs, files in os.walk(os.path.join(storage, subdir)):
+            for fname in files:
+                if fname == ".gitkeep":
+                    continue
+                fpath = os.path.join(root, fname)
+                try:
+                    mtime = datetime.fromtimestamp(os.path.getmtime(fpath), tz=UTC)
+                    if mtime < cutoff:
+                        os.remove(fpath)
+                        removed += 1
+                except OSError:
+                    continue
 
     return {"removed": removed, "cutoff": cutoff.isoformat()}
 

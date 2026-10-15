@@ -1,0 +1,43 @@
+# AI engine on its own GPU machine, sending detections to the main ClassroomGuard server.
+#
+#   docker compose -f docker-compose.ai-host.yml up -d --build
+#
+# .env on this machine:
+#   BACKEND_URL=https://classroomguard.college.edu
+#   AI_SERVICE_TOKEN=<same value as on the main server>
+#   AI_ENGINE_NAME=ai-block-b          # shown in the web app status
+# If the main server uses Caddy's internal CA, copy its root.crt to deploy/certs/ and set
+#   REQUESTS_CA_BUNDLE=/certs/root.crt
+# Evidence frames are written to ./storage - mount the main server's storage share there
+# (NFS/SMB) so they appear in the web app's Evidence viewer. See docs/DEPLOY_ONPREM.md.
+
+services:
+  ai:
+    build:
+      context: ./ai
+      dockerfile: Dockerfile
+    image: classroomguard-ai:latest
+    hostname: ${AI_ENGINE_NAME:-classroomguard-ai}
+    environment:
+      BACKEND_URL: ${BACKEND_URL:?set BACKEND_URL to the main server, e.g. https://classroomguard.college.edu}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN (same value as the main server)}
+      REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ./ai/models:/app/models:ro
+      - ./ai/config.yaml:/app/config.yaml:ro
+      - ./deploy/certs:/certs:ro
+      - ./storage:/app/storage
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"

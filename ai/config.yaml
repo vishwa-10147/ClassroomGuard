@@ -1,18 +1,21 @@
-# Classroom Guard - Cheating Detection Configuration
-# RTX 4070 8GB | 2 Cameras | YOLO26m + Pose
-# Upgraded from YOLOv8m → YOLO26m (NMS-free, end-to-end, ~43% faster CPU)
+# ClassroomGuard AI engine - default configuration (used by the Docker "ai" service)
+# Exam detector (phone + calculator) at 1280 px + YOLOv8m-pose, FP16 on CUDA. See ai/README.md.
 
 # === CAMERA SETTINGS ===
-# Using local sample videos (27 classroom videos in sample_videos/)
-# To use a webcam, replace source with an integer: 0 = default cam
+# One entry per camera. For an IP camera use its RTSP URL, e.g.
+#   source: "rtsp://viewer:PASSWORD@10.0.5.31:554/Streaming/Channels/101"   (Hikvision main stream)
+# A video file path or a webcam index (0) also works for testing.
+# backend_camera_id = the "Camera ID" you entered when adding the camera in the web app.
 cameras:
   - id: 0
     name: "Room 306-B Camera 5"
+    backend_camera_id: "cam-001"           # Camera ID from the web app (Cameras page)
     source: "sample_videos/306-B-5.mp4"
     resolution: [1920, 1080]
     fps: 30
   - id: 1
     name: "Room 306-B Main"
+    backend_camera_id: "cam-002"           # Camera ID from the web app (Cameras page)
     source: "sample_videos/306-B.mp4"
     resolution: [1920, 1080]
     fps: 30

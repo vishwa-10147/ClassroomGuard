@@ -1,4 +1,5 @@
 import json
+import time
 from contextlib import asynccontextmanager
 
 from backend.app.core.config import settings
@@ -115,12 +116,35 @@ async def check_database() -> str:
         return "disconnected"
 
 
+# Last heartbeat per AI engine (in memory: the API runs as a single worker)
+_AI_HEARTBEATS: dict[str, dict] = {}
+AI_OFFLINE_AFTER_S = 90
+
+
+@app.post("/api/v1/ai/heartbeat", status_code=204)
+async def ai_heartbeat(body: dict, _caller=Depends(require_permission_or_service("alerts:write"))):
+    """Called by each AI engine every 30 s so the dashboard can show whether detection is running."""
+    engine_name = str(body.get("engine") or "ai")[:100]
+    _AI_HEARTBEATS[engine_name] = {
+        "last_seen": time.time(),
+        "cameras": int(body.get("cameras", 0)),
+        "fps": round(float(body.get("fps", 0.0)), 1),
+    }
+
+
 @app.get("/api/v1/status")
 async def api_status():
     database_status = await check_database()
+    now = time.time()
+    engines = [
+        {"engine": name, "seconds_ago": round(now - hb["last_seen"]), "cameras": hb["cameras"], "fps": hb["fps"]}
+        for name, hb in _AI_HEARTBEATS.items()
+    ]
+    ai_online = any(e["seconds_ago"] <= AI_OFFLINE_AFTER_S for e in engines)
     return {
         "status": "online",
-        "ai": "not_connected",
+        "ai": "online" if ai_online else "offline",
+        "aiEngines": engines,
         "database": database_status,
         "wsConnections": len(manager.active_connections),
     }

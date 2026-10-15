@@ -15,10 +15,11 @@ interface SystemState {
   updateSystemHealth: (data: Partial<SystemState>) => void;
   setWsConnected: (connected: boolean) => void;
   fetchRealData: () => Promise<void>;
+  fetchAiStatus: () => Promise<void>;
 }
 
 export const useSystemStore = create<SystemState>((set) => ({
-  aiStatus: 'online',
+  aiStatus: 'offline',
   camerasOnline: 0,
   camerasTotal: 0,
   activeAlerts: 0,
@@ -29,6 +30,14 @@ export const useSystemStore = create<SystemState>((set) => ({
   lastUpdated: null,
   updateSystemHealth: (data) => set((state) => ({ ...state, ...data, lastUpdated: new Date().toISOString() })),
   setWsConnected: (connected) => set({ wsConnected: connected }),
+  fetchAiStatus: async () => {
+    try {
+      const res = await apiClient.get<{ ai: 'online' | 'offline' }>('/status');
+      set({ aiStatus: res.data.ai === 'online' ? 'online' : 'offline' });
+    } catch {
+      set({ aiStatus: 'offline' });
+    }
+  },
   fetchRealData: async () => {
     try {
       const [camerasRes, alertCountRes, eventsRes] = await Promise.all([

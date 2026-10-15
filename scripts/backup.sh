@@ -17,7 +17,8 @@ docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES
 mv "$DEST/db_$TS.dump.tmp" "$DEST/db_$TS.dump"
 
 echo "[$(date)] Backing up evidence and recordings"
-tar -czf "$DEST/storage_$TS.tar.gz" storage
+# The AI keeps writing evidence while we read; GNU tar exits 1 for "file changed" - that is fine
+tar --warning=no-file-changed -czf "$DEST/storage_$TS.tar.gz" storage || [ $? -eq 1 ]
 
 find "$DEST" -name 'db_*.dump' -mtime +"$KEEP_DAYS" -delete
 find "$DEST" -name 'storage_*.tar.gz' -mtime +"$KEEP_DAYS" -delete

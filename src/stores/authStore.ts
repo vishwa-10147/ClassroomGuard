@@ -26,7 +26,7 @@ interface AuthState {
   checkAuth: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   // A saved token must be verified before route guards decide anything, otherwise a page
@@ -97,6 +97,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   checkAuth: async () => {
+    // Just signed in: the session is already verified (re-checking would remount the app shell)
+    if (get().isAuthenticated && get().user) return;
+
     const token = localStorage.getItem('token');
 
     if (!token) {

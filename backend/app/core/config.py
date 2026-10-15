@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True  # port 587; set false and SMTP_SSL=true for port 465
     smtp_ssl: bool = False
 
+    # Set true for Celery workers (no connection pooling across event loops)
+    db_null_pool: bool = False
+
     # Disable only for automated test runs that log in many times per minute
     rate_limit_enabled: bool = True
 

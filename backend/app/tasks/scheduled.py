@@ -2,12 +2,33 @@ from __future__ import annotations
 
 from backend.app.core.celery import celery_app
 
+DEFAULT_RETENTION_DAYS = 90
+
+
+async def _retention_days() -> int:
+    """The "Data retention (days)" value from System Settings."""
+    import json
+
+    from backend.app.core.database import AsyncSessionLocal
+    from backend.app.models.system_setting import SystemSetting
+
+    async with AsyncSessionLocal() as db:
+        setting = await db.get(SystemSetting, "data_retention_days")
+    if setting is None:
+        return DEFAULT_RETENTION_DAYS
+    try:
+        return max(1, int(json.loads(setting.value)))
+    except (ValueError, TypeError):
+        return DEFAULT_RETENTION_DAYS
+
 
 @celery_app.task
 def scheduled_cleanup_old_evidence() -> str:
-    """Daily evidence cleanup (scheduled in core/celery.py beat_schedule)."""
+    """Daily evidence cleanup using the retention period from System Settings."""
     from backend.app.tasks.alert_tasks import cleanup_old_evidence
-    return cleanup_old_evidence.delay(days=30).id
+    from backend.app.tasks.retention_tasks import _run_async
+
+    return cleanup_old_evidence.delay(days=_run_async(_retention_days())).id
 
 
 @celery_app.task

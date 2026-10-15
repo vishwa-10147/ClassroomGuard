@@ -43,6 +43,23 @@ test('rejects a wrong password', async ({ page }) => {
   await expect(page).toHaveURL(/\/login/);
 });
 
+test('forgot password sends a neutral confirmation', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('link', { name: 'Forgot password?' }).click();
+  await expect(page).toHaveURL(/\/forgot-password/);
+  await page.getByPlaceholder('you@college.edu').fill('nobody@example.com');
+  await page.getByRole('button', { name: 'Send reset link' }).click();
+  await expect(page.getByRole('status')).toContainText('If an account exists');
+});
+
+test('reset page rejects an invalid link', async ({ page }) => {
+  await page.goto('/reset-password?token=not-a-real-token');
+  await page.getByLabel('New password', { exact: true }).fill('Long-Enough-Pass-1');
+  await page.getByLabel('Confirm new password').fill('Long-Enough-Pass-1');
+  await page.getByRole('button', { name: 'Set new password' }).click();
+  await expect(page.getByRole('alert')).toContainText('invalid or has expired');
+});
+
 test('every page loads without API errors or crashes', async ({ page }) => {
   const failures: string[] = [];
   page.on('response', (res) => {

@@ -4,14 +4,20 @@
 mode: "classroom"
 
 # === CAMERA SETTINGS ===
+# One entry per camera. For an IP camera use its RTSP URL, e.g.
+#   source: "rtsp://viewer:PASSWORD@10.0.5.31:554/Streaming/Channels/101"   (Hikvision main stream)
+# A video file path or a webcam index (0) also works for testing.
+# backend_camera_id = the "Camera ID" you entered when adding the camera in the web app.
 cameras:
   - id: 0
     name: "Room 306-B Camera 5"
+    backend_camera_id: "cam-001"           # Camera ID from the web app (Cameras page)
     source: "sample_videos/306-B-5.mp4"
     resolution: [1920, 1080]
     fps: 30
   - id: 1
     name: "Room 306-B Main"
+    backend_camera_id: "cam-002"           # Camera ID from the web app (Cameras page)
     source: "sample_videos/306-B.mp4"
     resolution: [1920, 1080]
     fps: 30
