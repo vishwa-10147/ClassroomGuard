@@ -1,27 +1,19 @@
+"""Offline video analysis used by process_single_video.py (uploaded recordings).
+
+Runs detection + pose on a recorded video and returns events/alerts; the caller pushes
+them to the API with the service token.
 """
-ClassroomGuard - Test Video Analysis Script
-Processes test videos through YOLOv8m detection + pose on GPU,
-generates cheating alerts, and seeds the backend database via API.
-"""
-import asyncio
-import json
 import logging
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 import cv2
-import numpy as np
-import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ultralytics import YOLO
 
-from src.tracker import ByteTracker
-from src.gaze_estimator import GazeEstimator
-from src.false_positive_filter import FalsePositiveFilter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("analyze_videos")
@@ -30,16 +22,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 MODELS_DIR = PROJECT_ROOT / "ai" / "models"
 STORAGE_EVIDENCE = PROJECT_ROOT / "storage" / "evidence"
 STORAGE_FRAMES = PROJECT_ROOT / "storage" / "frames"
-BACKEND_URL = "http://localhost:8000"
 
 STORAGE_EVIDENCE.mkdir(parents=True, exist_ok=True)
 STORAGE_FRAMES.mkdir(parents=True, exist_ok=True)
-
-TEST_VIDEOS = [
-    {"path": PROJECT_ROOT / "test_data" / "test1.mp4", "label": "test1_mp4"},
-    {"path": PROJECT_ROOT / "test_data" / "test2.mp4", "label": "test2_mp4"},
-    {"path": PROJECT_ROOT / "test_data" / "test1.avi", "label": "test1_avi"},
-]
 
 DEVICE = 0
 CONF_DET = 0.30
@@ -395,173 +380,3 @@ def analyze_video(video_path, detector, pose_model, tracker, gaze_estimator, fp_
     }
     logger.info("  Done: %d alerts, %d events, %.1f FPS", len(alerts), len(events), avg_fps)
     return {"events": events, "alerts": alerts, "stats": stats}
-
-
-async def seed_database(all_results, client):
-    token_data = None
-    try:
-        resp = await client.post(f"{BACKEND_URL}/api/v1/auth/login", json={
-            "email": "admin@classguard.dev",
-            "password": "Admin@12345",
-        })
-        token_data = resp.json()
-    except Exception as e:
-        logger.error("Login failed: %s", e)
-        return
-
-    headers = {"Authorization": f"Bearer {token_data['access_token']}"}
-
-    resp = await client.get(f"{BACKEND_URL}/api/v1/classrooms", headers=headers)
-    classrooms = resp.json()
-    if not classrooms:
-        logger.error("No classrooms found. Run seed_data.py first.")
-        return
-    classroom_id = classrooms[0]["id"]
-    classroom_name = classrooms[0]["name"]
-
-    resp = await client.get(f"{BACKEND_URL}/api/v1/cameras", headers=headers)
-    cameras = resp.json()
-    if not cameras:
-        logger.error("No cameras found. Run seed_data.py first.")
-        return
-    camera_id = cameras[0]["id"]
-    camera_name = cameras[0]["name"]
-
-    logger.info("Using classroom=%s (%s), camera=%s (%s)", classroom_name, classroom_id, camera_name, camera_id)
-
-    base_time = datetime.now(timezone.utc) - timedelta(hours=2)
-    total_events = 0
-    total_alerts = 0
-
-    for video_label, results in all_results.items():
-        video_events = results["events"]
-        video_alerts = results["alerts"]
-
-        for i, evt in enumerate(video_events):
-            event_time = base_time + timedelta(seconds=i * 30)
-            try:
-                await client.post(f"{BACKEND_URL}/api/v1/events", headers=headers, json={
-                    "eventType": evt["type"],
-                    "severity": evt["severity"],
-                    "message": evt["description"],
-                    "classroomId": classroom_id,
-                    "cameraId": camera_id,
-                    "metadata": json.dumps(evt.get("metadata", {})),
-                })
-                total_events += 1
-            except Exception as e:
-                logger.warning("Failed to create event: %s", e)
-
-        for i, alert in enumerate(video_alerts):
-            alert_time = base_time + timedelta(seconds=i * 15)
-            severity_map = {"high": "high", "medium": "medium", "low": "low"}
-            sev = severity_map.get(alert["severity"], "info")
-            try:
-                await client.post(f"{BACKEND_URL}/api/v1/alerts", headers=headers, json={
-                    "title": alert["title"],
-                    "description": alert["description"],
-                    "severity": sev,
-                    "status": "active",
-                    "classroomId": classroom_id,
-                    "cameraId": camera_id,
-                    "type": alert["type"],
-                })
-                total_alerts += 1
-            except Exception as e:
-                logger.warning("Failed to create alert: %s", e)
-
-        await asyncio.sleep(0.1)
-
-    logger.info("Seeded %d events and %d alerts into the database.", total_events, total_alerts)
-
-
-async def main():
-    logger.info("Loading models...")
-    # Try YOLO26m first (preferred), fall back to YOLO26n (on disk) then yolov8m
-    model_candidates = [
-        MODELS_DIR / "yolo26m_custom.pt",   # custom trained
-        MODELS_DIR / "yolo26m.pt",           # base YOLO26m
-        MODELS_DIR / "yolov8m.pt",           # legacy fallback
-    ]
-    det_path = next((p for p in model_candidates if p.exists()), "yolo26m.pt")
-    logger.info("Detection model: %s", det_path)
-    detector = YOLO(str(det_path))
-    pose_model = YOLO(str(MODELS_DIR / "yolov8m-pose.pt"))
-    logger.info("Models loaded on GPU.")
-
-    # Load config for tracker / gaze / fp_filter
-    config_path = Path(__file__).resolve().parent / "config.yaml"
-    config = {}
-    if config_path.exists():
-        import yaml
-        with open(config_path) as f:
-            config = yaml.safe_load(f) or {}
-
-    tracker = ByteTracker(config)
-    gaze_estimator = GazeEstimator(config)
-    fp_filter = FalsePositiveFilter(config)
-
-    all_results = {}
-    for video_info in TEST_VIDEOS:
-        path = video_info["path"]
-        label = video_info["label"]
-        if not path.exists():
-            logger.warning("Skipping missing video: %s", path)
-            continue
-        logger.info("Analyzing: %s", path.name)
-        results = analyze_video(path, detector, pose_model, tracker, gaze_estimator, fp_filter)
-        all_results[label] = results
-
-        # Reset tracker between videos
-        tracker = ByteTracker(config)
-
-    logger.info("All videos analyzed. Seeding database...")
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        await seed_database(all_results, client)
-
-    report_path = PROJECT_ROOT / "ai" / "analysis_results.json"
-    serializable = {}
-    for k, v in all_results.items():
-        serializable[k] = {
-            "stats": v["stats"],
-            "alerts_count": len(v["alerts"]),
-            "events_count": len(v["events"]),
-            "alerts_sample": v["alerts"][:5],
-            "events_sample": v["events"][:3],
-        }
-    with open(report_path, "w") as f:
-        json.dump(serializable, f, indent=2, default=str)
-    logger.info("Report saved to %s", report_path)
-
-    # Summary statistics
-    total_alerts_all = sum(len(r["alerts"]) for r in all_results.values())
-    total_events_all = sum(len(r["events"]) for r in all_results.values())
-    total_persons = sum(r["stats"].get("persons_tracked", 0) for r in all_results.values())
-
-    print("\n" + "=" * 60)
-    print("ANALYSIS COMPLETE")
-    print("=" * 60)
-    for label, results in all_results.items():
-        s = results["stats"]
-        print(f"\n  {label}:")
-        print(f"    Frames analyzed: {s['analyzed_frames']}/{s['total_frames']}")
-        print(f"    Processing time: {s['processing_time_s']}s")
-        print(f"    GPU FPS: {s['avg_fps']}")
-        print(f"    Persons tracked: {s['persons_tracked']}")
-        print(f"    Alerts generated: {s['alerts_generated']}")
-        print(f"    Events generated: {s['events_generated']}")
-        if s.get("per_person_breakdown"):
-            print(f"    Per-person alerts:")
-            for pid, counts in s["per_person_breakdown"].items():
-                if counts:
-                    print(f"      Student #{pid}: {dict(counts)}")
-    print(f"\n  TOTALS:")
-    print(f"    Videos processed: {len(all_results)}")
-    print(f"    Total persons tracked: {total_persons}")
-    print(f"    Total alerts: {total_alerts_all}")
-    print(f"    Total events: {total_events_all}")
-    print("\n" + "=" * 60)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

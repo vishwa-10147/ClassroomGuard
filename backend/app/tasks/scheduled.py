@@ -4,39 +4,21 @@ from backend.app.core.celery import celery_app
 
 
 @celery_app.task
-def scheduled_cleanup_old_evidence() -> dict:
-    """Daily cleanup — intended for Celery Beat or external cron.
-
-    Beat schedule (add to celery_app.conf.beat_schedule if using built-in Beat):
-
-        "cleanup-daily": {
-            "task": "app.tasks.scheduled.scheduled_cleanup_old_evidence",
-            "schedule": crontab(hour=3, minute=0),
-        }
-    """
+def scheduled_cleanup_old_evidence() -> str:
+    """Daily evidence cleanup (scheduled in core/celery.py beat_schedule)."""
     from backend.app.tasks.alert_tasks import cleanup_old_evidence
-    return cleanup_old_evidence.delay(days=30)
+    return cleanup_old_evidence.delay(days=30).id
 
 
 @celery_app.task
-def scheduled_retention_enforcement() -> dict:
-    """Daily retention enforcement — check all orgs, enforce retention policies.
-
-    Cron:
-        0 2 * * * celery -A app.core.celery call app.tasks.scheduled.scheduled_retention_enforcement
-
-    Beat schedule:
-        "retention-daily": {
-            "task": "app.tasks.scheduled.scheduled_retention_enforcement",
-            "schedule": crontab(hour=2, minute=0),
-        }
-    """
+def scheduled_retention_enforcement() -> str:
+    """Daily retention enforcement for all organisations (scheduled in core/celery.py)."""
     from backend.app.tasks.retention_tasks import enforce_retention_policies
-    return enforce_retention_policies.delay()
+    return enforce_retention_policies.delay().id
 
 
 @celery_app.task
-def scheduled_weekly_report() -> dict:
+def scheduled_weekly_report() -> str:
     from backend.app.tasks.alert_tasks import generate_report
     # Send report to system admin
-    return generate_report.delay(report_type="weekly", params={"email": "admin@classroomguard.local"})
+    return generate_report.delay(report_type="weekly", params={"email": "admin@classroomguard.local"}).id

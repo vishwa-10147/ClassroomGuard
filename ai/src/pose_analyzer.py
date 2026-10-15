@@ -40,6 +40,8 @@ class PoseAnalyzer:
 
     def _load_model(self):
         self.config["device"] = resolve_device(self.config["device"])
+        # FP16 inference on CUDA (~2x throughput); quantize: 32 in the config forces full precision
+        self.half = self.config["device"] != "cpu" and int(self.config.get("quantize", 16)) == 16
         weights = self.config["weights"]
         engine_path = str(Path(weights).with_suffix(".engine"))
         try:
@@ -59,6 +61,7 @@ class PoseAnalyzer:
             conf=self.config["confidence"],
             imgsz=self.config["input_size"],
             device=self.config["device"],
+            quantize=16 if self.half else None,  # FP16 on CUDA ("half" is deprecated)
             verbose=False,
         )
 
@@ -69,6 +72,7 @@ class PoseAnalyzer:
             kpts = r.keypoints.xy.cpu().numpy()
             kpts_conf = r.keypoints.conf.cpu().numpy() if r.keypoints.conf is not None else None
             boxes = r.boxes.xyxy.cpu().numpy() if r.boxes is not None else []
+            box_confs = r.boxes.conf.cpu().numpy() if r.boxes is not None else []
 
             for i, person_kpts in enumerate(kpts):
                 box = boxes[i].astype(int).tolist() if i < len(boxes) else [0, 0, 0, 0]
@@ -78,6 +82,7 @@ class PoseAnalyzer:
                     "keypoint_conf": kpts_conf[i].tolist() if kpts_conf is not None else [],
                     "bbox": box,
                     "confidence": conf,
+                    "box_conf": float(box_confs[i]) if i < len(box_confs) else conf,
                 })
         return poses
 
@@ -197,6 +202,9 @@ class PoseAnalyzer:
             analyses.append({
                 "bbox": pose["bbox"],
                 "confidence": pose["confidence"],
+                "box_conf": pose["box_conf"],
+                "keypoints": kpts,
+                "keypoint_conf": pose["keypoint_conf"],
                 "head": head,
                 "posture": posture,
                 "hands": hands,

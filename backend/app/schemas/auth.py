@@ -9,7 +9,7 @@ class LoginRequest(BaseModel):
 class UserResponse(BaseModel):
     id: str
     name: str
-    email: EmailStr
+    email: str  # validated on input; output must never fail on a stored address
     role: str
     status: str
     avatar: str | None = None

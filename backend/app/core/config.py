@@ -1,14 +1,17 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEV_JWT_SECRET = "classroomguard-dev-secret-change-in-prod"
 
 
 class Settings(BaseSettings):
     app_name: str = "ClassroomGuard"
     app_env: str = "development"
-    debug: bool = True
+    debug: bool = False
 
     database_url: str = "postgresql+asyncpg://classroomguard:classroomguard_dev@localhost:5432/classroomguard"
 
-    jwt_secret: str = "classroomguard-dev-secret-change-in-prod"
+    jwt_secret: str = _DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
@@ -34,6 +37,15 @@ class Settings(BaseSettings):
     enable_tracing: bool = False
     otlp_endpoint: str = "http://localhost:4317"
     sentry_dsn: str = ""
+
+    @model_validator(mode="after")
+    def _require_production_secrets(self) -> "Settings":
+        if self.app_env == "production":
+            if self.jwt_secret == _DEV_JWT_SECRET or len(self.jwt_secret) < 32:
+                raise ValueError("JWT_SECRET must be set to a random value of at least 32 characters in production")
+            if self.debug:
+                raise ValueError("DEBUG must be false in production")
+        return self
 
     model_config = SettingsConfigDict(
         env_file="backend/.env",

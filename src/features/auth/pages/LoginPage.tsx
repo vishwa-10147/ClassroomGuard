@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Shield, Eye, EyeOff } from 'lucide-react';
 import { Button, Input, StatusIndicator } from '@/components/ui';
+
+/** Page the user was sent away from by ProtectedRoute, so login returns them there. */
+function useRedirectTarget(): string {
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname: string; search?: string } } | null)?.from;
+  return from && from.pathname !== '/login' ? `${from.pathname}${from.search ?? ''}` : '/dashboard';
+}
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -13,6 +20,7 @@ export function LoginForm() {
   const login = useAuthStore((s) => s.login);
   const isLoading = useAuthStore((s) => s.isLoading);
   const navigate = useNavigate();
+  const redirectTo = useRedirectTarget();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +33,7 @@ export function LoginForm() {
 
     try {
       await login(email, password);
-      navigate('/dashboard', { replace: true });
+      navigate(redirectTo, { replace: true });
     } catch {
       setError('Invalid email or password. Please try again.');
     }
@@ -100,9 +108,10 @@ export function LoginForm() {
 
 export function LoginPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const redirectTo = useRedirectTarget();
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   return (

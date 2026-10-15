@@ -1,0 +1,84 @@
+# AWS overlay - layer on top of docker-compose.yml on the EC2 host:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.aws.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.aws.yml up -d
+#
+# * Images come from Amazon ECR (IMAGE_PREFIX=<account>.dkr.ecr.<region>.amazonaws.com/classroomguard)
+# * Database is Amazon RDS for PostgreSQL (DATABASE_URL), cache is ElastiCache Redis (REDIS_URL)
+# * Logs go to CloudWatch Logs (the instance role needs logs:CreateLogStream / logs:PutLogEvents)
+# * TLS terminates at the Application Load Balancer, which forwards to the frontend on port 80
+# See docs/DEPLOY_AWS.md for the full setup.
+
+x-cloudwatch: &cloudwatch
+  driver: awslogs
+  options:
+    awslogs-region: ${AWS_REGION:?set AWS_REGION}
+    awslogs-group: ${CLOUDWATCH_LOG_GROUP:-/classroomguard}
+    awslogs-create-group: "true"
+
+services:
+  # Managed services replace the local containers
+  postgres:
+    profiles: ["local-db"]
+  redis:
+    profiles: ["local-db"]
+
+  backend:
+    build: !reset null
+    ports: !reset []
+    depends_on: !reset {}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL to the RDS endpoint}
+      REDIS_URL: ${REDIS_URL:?set REDIS_URL to the ElastiCache endpoint}
+    logging:
+      <<: *cloudwatch
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP:-/classroomguard}
+        awslogs-create-group: "true"
+        awslogs-stream: backend
+
+  celery-worker:
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    logging:
+      <<: *cloudwatch
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP:-/classroomguard}
+        awslogs-create-group: "true"
+        awslogs-stream: celery-worker
+
+  celery-beat:
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    logging:
+      <<: *cloudwatch
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP:-/classroomguard}
+        awslogs-create-group: "true"
+        awslogs-stream: celery-beat
+
+  frontend:
+    build: !reset null
+    ports: !reset ["80:80"]
+    logging:
+      <<: *cloudwatch
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP:-/classroomguard}
+        awslogs-create-group: "true"
+        awslogs-stream: frontend
+
+  ai:
+    build: !reset null
+    logging:
+      <<: *cloudwatch
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: ${CLOUDWATCH_LOG_GROUP:-/classroomguard}
+        awslogs-create-group: "true"
+        awslogs-stream: ai

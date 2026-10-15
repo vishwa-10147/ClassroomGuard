@@ -1,0 +1,56 @@
+{
+  "weights": "models/exam_detector.pt",
+  "imgsz": 1280,
+  "thresholds_from_val": {
+    "cell_phone": 0.34,
+    "calculator": 0.59
+  },
+  "all_test": {
+    "images": 387,
+    "cell_phone": {
+      "tp": 421,
+      "fp": 29,
+      "fn": 147,
+      "precision": 0.936,
+      "recall": 0.741,
+      "f1": 0.827
+    },
+    "calculator": {
+      "tp": 47,
+      "fp": 10,
+      "fn": 6,
+      "precision": 0.825,
+      "recall": 0.887,
+      "f1": 0.855
+    }
+  },
+  "cctv_unseen_room": {
+    "images": 40,
+    "cell_phone": {
+      "tp": 83,
+      "fp": 6,
+      "fn": 110,
+      "precision": 0.933,
+      "recall": 0.43,
+      "f1": 0.589
+    },
+    "calculator": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  },
+  "test_map": {
+    "cell_phone": {
+      "mAP50": 0.867,
+      "mAP50-95": 0.652
+    },
+    "calculator": {
+      "mAP50": 0.9,
+      "mAP50-95": 0.742
+    }
+  }
+}

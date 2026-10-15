@@ -5,17 +5,12 @@ import { StatusIndicator } from '@/components/ui';
 import { cameraService } from '@/services/api/cameraService';
 import type { Camera } from '@/types/camera.types';
 import { Link } from 'react-router-dom';
+import { useAuthedImage } from '@/hooks/useAuthedImage';
 
 function CameraSnapshot({ cameraId, className }: { cameraId: string; className?: string }) {
-  const [src, setSrc] = useState(`/api/v1/cameras/${cameraId}/snapshot?t=${Date.now()}`);
-  const [error, setError] = useState(false);
+  const { src, error } = useAuthedImage(`/cameras/${cameraId}/snapshot`);
 
-  useEffect(() => {
-    setSrc(`/api/v1/cameras/${cameraId}/snapshot?t=${Date.now()}`);
-    setError(false);
-  }, [cameraId]);
-
-  if (error) {
+  if (error || !src) {
     return (
       <div className={cn('flex items-center justify-center bg-cg-bg-video', className)}>
         <WifiOff className="h-6 w-6 text-cg-text-tertiary/40" />
@@ -28,7 +23,6 @@ function CameraSnapshot({ cameraId, className }: { cameraId: string; className?:
       src={src}
       alt={`Camera ${cameraId}`}
       className={cn('object-cover w-full h-full', className)}
-      onError={() => setError(true)}
     />
   );
 }

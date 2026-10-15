@@ -20,13 +20,16 @@ cameras:
 # === MODEL SETTINGS ===
 models:
   detection:
-    weights: "models/yolo26m_custom.pt"    # YOLO26n custom trained
-    fallback_weights: "yolo26m.pt"
-    confidence: 0.15                        # LOW: phones in classroom videos score 0.15-0.40
+    weights: "models/exam_detector.pt"     # cell_phone + calculator (training/train_exam_detector.py)
+    fallback_weights: "models/yolo26m_custom.pt"
+    confidence: 0.10                        # pre-filter; per-class thresholds below decide
+    class_confidence:                       # from models/exam_detector.eval.json (val max-F1)
+      cell_phone: 0.34
+      calculator: 0.59
     iou_threshold: 0.45
-    input_size: 1024                        # 1024px preserves small phone details in 1440p/4K classroom video!
+    input_size: 1280                        # 1024px preserves small phone details in 1440p/4K classroom video!
     device: 0
-    enhance_shadows: true                   # CLAHE shadow enhancement pass for dark under-desk areas
+    enhance_shadows: false                  # second CLAHE pass doubles inference cost; not used in evaluation
     quantize: 16                            # FP16 (replaces deprecated 'half: true')
 
   # Fast cascade detector: yolo26n runs first (2ms), yolo26m confirms (8ms)
@@ -98,7 +101,7 @@ cheating_rules:
   # Phone detection
   phone_usage:
     enabled: true
-    alert_after_frames: 2                  # alert after 2 consecutive frames
+    alert_after_seconds: 1.0               # phone must stay with the student this long
     confidence_threshold: 0.15             # 0.15 catches hidden/dark phones in under-desk shadows
     proximity_to_person: 220               # pixels - phone near a person = suspicious
 
@@ -111,13 +114,15 @@ cheating_rules:
   # Calculator detection (if not allowed)
   calculator_usage:
     enabled: true
-    alert_after_frames: 3
+    alert_after_seconds: 1.5
     confidence_threshold: 0.5
-    allowed_sections: []                   # seat numbers where calculator is allowed
+    allowed: false                         # true when calculators are permitted
 
   # Posture analysis
+  # Head-turn / looking-down cues: off by default. On fixed overhead cameras they fire on normal
+  # exam behaviour (writing, facing the invigilator); enable only after per-camera calibration.
   posture:
-    enabled: true
+    enabled: false
     head_turn_threshold: 25                # degrees - head turned this much = suspicious
     head_turn_duration: 3.0                # seconds - sustained head turn
     looking_down_threshold: 30             # degrees - looking down (hidden materials?)
@@ -144,6 +149,7 @@ alerts:
   save_snapshots: true
   snapshot_dir: "logs/snapshots/"
   cooldown: 10.0                          # seconds between same alert type per student
+  object_cooldown: 120.0                  # phone/calculator: one alert per student or desk every 2 minutes
 
 # === TRAINING ===
 training:

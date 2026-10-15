@@ -1,87 +1,71 @@
-# ClassroomGuard Training Dataset Structure
+# Training the exam detector
 
-## Directory Layout
+How the `cell_phone` / `calculator` detector in `ai/models/exam_detector.pt` is built,
+trained and evaluated. Results and model details are in [../README.md](../README.md).
 
-```
-ai/training/dataset_structure/
-  images/
-    train/    # 70% of annotated images
-    val/      # 20% of annotated images
-    test/     # 10% of annotated images
-  labels/
-    train/    # YOLO-format .txt labels matching train/ images
-    val/      # YOLO-format .txt labels matching val/ images
-    test/     # YOLO-format .txt labels matching test/ images
-```
+## Pipeline
 
-## Label Format (YOLO)
+| Step | Command (from `ai/`) | Output |
+|---|---|---|
+| 1. Build dataset | `.venv/Scripts/python scripts/build_exam_dataset.py` | `data/exam_detector/` with train / val / test splits |
+| 2. Train | `.venv/Scripts/python training/train_exam_detector.py` | `runs/exam_detector/`, best weights copied to `models/exam_detector.pt` |
+| 3. Evaluate | `.venv/Scripts/python scripts/evaluate_exam_detector.py` | `models/exam_detector.eval.json` (thresholds + test metrics) |
+| 4. Review on real footage | `.venv/Scripts/python scripts/review_on_videos.py --videos sample_videos/<file>.mp4` | `runs/video_review/` annotated frames + contact sheet |
 
-Each image has a corresponding `.txt` file in `labels/` with one row per object:
+On Linux/macOS use `.venv/bin/python`.
+
+## Data sources
+
+| Source | Content | Licence | Split |
+|---|---|---|---|
+| Roboflow "Classroom Cell Phone Detection" v20 + "classroom phone detection" v2 (`data/`) | Overhead CCTV frames from classrooms, phone boxes | CC BY 4.0 | By classroom: Class_1 → test, Class_4 → val, Class_2/3 → train |
+| Open Images V6 (`data/openimages/`) | Human-verified *Calculator* and *Mobile phone* boxes | CC BY 4.0 | Official train / validation / test |
+| LVIS v1 (`data/lvis/`) | Calculator images with exhaustive calculator labels | CC BY 4.0 | LVIS train → train, LVIS val → val |
+
+Rules applied by the builder:
+
+- Frames shared by the two Roboflow sets are de-duplicated by original file name.
+- CCTV frames are split **by classroom**, not by frame, so test frames come from a room the
+  model never saw; adjacent frames of one video cannot leak between splits.
+- Only the phone class is kept from the Roboflow sets: their "person" label marks phone users
+  only. People are found at runtime by the pose model.
+- Open Images images containing group-of or depiction boxes are dropped.
+
+## Training settings
+
+`training/train_exam_detector.py` fine-tunes COCO-pretrained `yolo26s.pt`:
+
+| Setting | Value | Why |
+|---|---|---|
+| Input size | 1280 | Phones are ~20–30 px wide in 1280×720 CCTV frames |
+| Batch | 3 | Fits an 8 GB laptop GPU at 1280 px without spilling into shared memory |
+| Epochs / patience | 120 / 30 | Early stopping on validation mAP |
+| Augmentation | mosaic, scale 0.5, translate 0.1, horizontal flip, HSV jitter | Fixed overhead cameras: no vertical flips or rotations |
+| Seed | 0, deterministic | Reproducible runs |
+
+## Evaluation protocol
+
+`scripts/evaluate_exam_detector.py`:
+
+1. Predicts the **validation** split once and picks, per class, the confidence threshold with the
+   best F1. Thresholds are never tuned on test data.
+2. Reports precision, recall and F1 at those thresholds (IoU ≥ 0.5) on the **test** split, both
+   overall and for the unseen CCTV classroom alone, plus mAP50 / mAP50-95.
+3. Older models with different class ids can be compared on the same footing with
+   `--class-map`, e.g. `--class-map "1:0,2:1"` for the previous five-class model.
+
+Copy the thresholds from the report into `models.detection.class_confidence` in
+`config_exam.yaml`.
+
+## Label format
+
+YOLO text files, one row per object, coordinates normalised to `[0, 1]`:
 
 ```
 <class_id> <x_center> <y_center> <width> <height>
 ```
 
-All values normalised to `[0, 1]`. Example:
-
-```
-0 0.512 0.347 0.12 0.45
-1 0.68  0.55  0.03 0.06
-```
-
-## Classes
-
-| ID | Name | Description |
-|----|------|-------------|
-| 0 | person | Student / teacher |
-| 1 | cell_phone | Mobile phone (in hand or on desk) |
-| 2 | calculator | Scientific or basic calculator |
-| 3 | cheat_sheet | Paper with notes (not allowed) |
-| 4 | earbuds | Wireless earbuds / headphones |
-
-## Data Collection Tips
-
-1. **Capture diverse angles** — front, back, side cameras, different heights
-2. **Vary lighting** — natural, fluorescent, dim
-3. **Include edge cases** — phone on desk, phone in lap, partially occluded
-4. **Balance classes** — at least 200 images per class, ideally 500+
-5. **Use varied backgrounds** — different classrooms, board, windows
-
-## Annotation Tools
-
-- [Roboflow](https://roboflow.com) — web-based, exports YOLO format
-- [Label Studio](https://labelstud.io) — self-hosted
-- [CVAT](https://cvat.ai) — computer vision annotation tool
-
-## Quick Start
-
-```bash
-# 1. Place images in dataset_structure/images/{train,val,test}/
-# 2. Place corresponding labels in dataset_structure/labels/{train,val,test}/
-# 3. Fine-tune detector:
-python train_detector.py --data classroom.yaml --epochs 100 --batch 16
-
-# 4. Fine-tune pose model:
-python train_pose.py --data classroom.yaml --epochs 100 --batch 16
-
-# 5. Export to TensorRT:
-python export_tensorrt.py --model ../runs/detect/classguard-detector/weights/best.pt
-python export_tensorrt.py --model ../runs/pose/classguard-pose/weights/best.pt
-```
-
-## Dataset Size Guidelines
-
-| Dataset Size | Expected mAP | Training Time (RTX 4070) |
-|-------------|-------------|-------------------------|
-| 500 images  | ~0.65       | ~30 min                 |
-| 2000 images | ~0.80       | ~2 hours                |
-| 5000 images | ~0.88       | ~5 hours                |
-| 10000+      | ~0.92+      | ~10+ hours              |
-
-## Validation
-
-After training, check `runs/detect/classguard-detector/` for:
-- `results.csv` — per-epoch metrics
-- `confusion_matrix.png` — class-wise accuracy
-- `results.png` — training curves
-- `weights/best.pt` — best model checkpoint
+| ID | Class |
+|---|---|
+| 0 | `cell_phone` |
+| 1 | `calculator` |

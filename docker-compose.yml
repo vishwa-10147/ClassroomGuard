@@ -1,16 +1,44 @@
+# ClassroomGuard - full stack
+#
+#   docker compose up -d --build                      # web stack: db, redis, API, worker, frontend
+#   docker compose --profile ai up -d --build         # + GPU AI engine (needs NVIDIA Container Toolkit)
+#   docker compose --profile monitoring up -d         # + Prometheus / Grafana
+#
+# Required settings come from .env (copy .env.example). On AWS, layer docker-compose.aws.yml
+# on top to use RDS / ElastiCache / ECR images instead of the local database and builds.
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+x-backend-env: &backend-env
+  DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-classroomguard}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-classroomguard}}
+  JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (32+ random characters)}
+  JWT_ALGORITHM: HS256
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+  APP_ENV: ${APP_ENV:-production}
+  DEBUG: "false"
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["http://localhost:3000"]}
+  STORAGE_PATH: /app/storage
+  USE_REDIS: "true"
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env (32+ random characters)}
+
 services:
   postgres:
     image: postgres:16-alpine
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-classroomguard}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-classroomguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}  # required locally via the backend DATABASE_URL default
       POSTGRES_DB: ${POSTGRES_DB:-classroomguard}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    networks:
-      - classguard-net
+    networks: [classguard-net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-classroomguard} -d ${POSTGRES_DB:-classroomguard}"]
       interval: 10s
@@ -18,20 +46,14 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
+    logging: *default-logging
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "127.0.0.1:6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
-    networks:
-      - classguard-net
+    networks: [classguard-net]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -39,102 +61,88 @@ services:
       retries: 5
       start_period: 5s
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
+    logging: *default-logging
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: classroomguard-backend:latest
+    image: ${IMAGE_PREFIX:-classroomguard}-backend:${IMAGE_TAG:-latest}
+    # Reached through the frontend's nginx (/api, /ws); published on localhost only for debugging
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://classroomguard:classroomguard@postgres:5432/classroomguard}
-      JWT_SECRET: ${JWT_SECRET:-changeme_in_production_jwt_secret_32_bytes_min}
-      JWT_ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
-      API_HOST: "0.0.0.0"
-      API_PORT: "8000"
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      STORAGE_PATH: ./storage
-      APP_ENV: ${APP_ENV:-production}
-      DEBUG: ${DEBUG:-false}
-      USE_REDIS: "true"
-      REDIS_URL: redis://redis:6379/0
-      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+    environment: *backend-env
     volumes:
       - ./storage:/app/storage
-    networks:
-      - classguard-net
+    networks: [classguard-net]
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "3"
+    logging: *default-logging
 
   celery-worker:
-    image: classroomguard-backend:latest
-    command: celery -A backend.app.core.celery worker --loglevel=info --concurrency=4
+    image: ${IMAGE_PREFIX:-classroomguard}-backend:${IMAGE_TAG:-latest}
+    command: ["celery", "-A", "backend.app.core.celery", "worker", "--loglevel=info", "--concurrency=4"]
     depends_on:
       backend:
-        condition: service_started
-      postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://classroomguard:classroomguard@postgres:5432/classroomguard}
-      JWT_SECRET: ${JWT_SECRET:-changeme_in_production_jwt_secret_32_bytes_min}
-      JWT_ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
-      STORAGE_PATH: ./storage
-      APP_ENV: ${APP_ENV:-production}
-      DEBUG: ${DEBUG:-false}
-      USE_REDIS: "true"
-      REDIS_URL: redis://redis:6379/0
+    environment: *backend-env
     volumes:
       - ./storage:/app/storage
-    networks:
-      - classguard-net
+    networks: [classguard-net]
+    healthcheck:
+      disable: true
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "3"
+    logging: *default-logging
+
+  celery-beat:
+    image: ${IMAGE_PREFIX:-classroomguard}-backend:${IMAGE_TAG:-latest}
+    command: ["celery", "-A", "backend.app.core.celery", "beat", "--loglevel=info", "--schedule", "/tmp/celerybeat-schedule"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment: *backend-env
+    networks: [classguard-net]
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+    logging: *default-logging
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_PREFIX:-classroomguard}-frontend:${IMAGE_TAG:-latest}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [classguard-net]
+    restart: unless-stopped
+    logging: *default-logging
 
   ai:
+    profiles: ["ai"]
     build:
       context: ./ai
       dockerfile: Dockerfile
-    image: classroomguard-ai:latest
+    image: ${IMAGE_PREFIX:-classroomguard}-ai:${IMAGE_TAG:-latest}
     depends_on:
       backend:
-        condition: service_started
-      redis:
         condition: service_healthy
-    command: ["python", "main.py", "--no-display", "--config", "config.yaml"]
     environment:
-      NVIDIA_VISIBLE_DEVICES: all
       BACKEND_URL: http://backend:8000
-      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env (32+ random characters)}
     volumes:
-      - ./ai/models:/app/models
-      - ./storage:/app/storage
-      - ./ai/config.yaml:/app/config.yaml
+      - ./ai/models:/app/models:ro
+      - ./ai/config.yaml:/app/config.yaml:ro
       - ./ai/sample_videos:/app/sample_videos:ro
-    networks:
-      - classguard-net
+      - ./storage:/app/storage
+    networks: [classguard-net]
     deploy:
       resources:
         reservations:
@@ -143,70 +151,39 @@ services:
               count: all
               capabilities: [gpu]
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "3"
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: classroomguard-frontend:latest
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    networks:
-      - classguard-net
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
+    logging: *default-logging
 
   prometheus:
-    image: prom/prometheus:latest
+    profiles: ["monitoring"]
+    image: prom/prometheus:v2.55.1
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    networks:
-      - classguard-net
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    networks: [classguard-net]
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
+    logging: *default-logging
 
   grafana:
-    image: grafana/grafana:latest
+    profiles: ["monitoring"]
+    image: grafana/grafana:11.3.1
     ports:
       - "127.0.0.1:3001:3000"
     volumes:
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-    networks:
-      - classguard-net
-    depends_on:
-      - prometheus
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}  # localhost-only; Grafana forces a change on first login
+    networks: [classguard-net]
+    depends_on: [prometheus]
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
+    logging: *default-logging
 
 volumes:
   pgdata:
@@ -217,4 +194,3 @@ volumes:
 networks:
   classguard-net:
     driver: bridge
-

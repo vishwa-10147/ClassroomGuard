@@ -91,3 +91,7 @@ test-results/
 .coverage.*
 .antigravity/
 anigravity_skills/
+# Local AI-assistant tooling and reference downloads (not part of the app)
+anigravity_skills/
+.antigravity/
+claude-code-best-practice-main/

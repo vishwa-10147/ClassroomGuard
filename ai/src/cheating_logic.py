@@ -24,8 +24,7 @@ class CheatingEngine:
         track_id = track.track_id
         if track_id not in self._student_state:
             self._student_state[track_id] = {
-                "phone_frames": 0,
-                "calculator_frames": 0,
+                "objects": {},
                 "head_turn_since": None,
                 "looking_down_since": None,
                 "last_alert_times": {},
@@ -39,47 +38,20 @@ class CheatingEngine:
         proximity = self.rules.get("phone_usage", {}).get("proximity_to_person", 150)
         near_phones = [d for d in phone_dets if self._is_near_person(track.bbox, d["bbox"], proximity)]
 
-        # --- Phone detection ---
-        if self.rules.get("phone_usage", {}).get("enabled", True):
-            if phone_dets:
-                if near_phones:
-                    phone_bbox = max(near_phones, key=lambda d: d["confidence"])["bbox"]
-                    state["phone_frames"] += 1
-                    threshold = self.rules["phone_usage"].get("alert_after_frames", 5)
-                    if state["phone_frames"] >= threshold:
-                        alert = self._make_alert(
-                            track_id, "phone_usage", "HIGH",
-                            f"Phone detected near student for {state['phone_frames']} frames",
-                            camera_id, {"phone_bbox": phone_bbox},
-                        )
-                        if alert:
-                            alerts.append(alert)
-                else:
-                    state["phone_frames"] = max(0, state["phone_frames"] - 1)
-
-        # --- Calculator detection ---
-        if self.rules.get("calculator_usage", {}).get("enabled", True):
-            # Only calculators near this student count against them
-            calc_dets = [
-                d for d in object_detections
-                if d["class_name"] == "calculator" and self._is_near_person(
-                    track.bbox, d["bbox"], self.rules["calculator_usage"].get("proximity_to_person", 150))
-            ]
-            if calc_dets:
-                allowed = self.rules["calculator_usage"].get("allowed_sections", [])
-                if track_id not in allowed:
-                    state["calculator_frames"] += 1
-                    threshold = self.rules["calculator_usage"].get("alert_after_frames", 3)
-                    if state["calculator_frames"] >= threshold:
-                        alert = self._make_alert(
-                            track_id, "calculator_usage", "MEDIUM",
-                            f"Calculator detected (not in allowed section)",
-                            camera_id, {"calculator_bbox": calc_dets[0]["bbox"]},
-                        )
-                        if alert:
-                            alerts.append(alert)
-            else:
-                state["calculator_frames"] = max(0, state["calculator_frames"] - 1)
+        # --- Prohibited objects: phone always, calculator unless this exam allows it ---
+        for rule_name, class_name, alert_type in (
+            ("phone_usage", "cell_phone", "phone_usage"),
+            ("calculator_usage", "calculator", "calculator_usage"),
+        ):
+            rule = self.rules.get(rule_name, {})
+            if not rule.get("enabled", True) or rule.get("allowed", False):
+                continue
+            alert = self._object_rule(
+                state, track, pose_analysis, object_detections, camera_id, now,
+                rule, class_name, alert_type,
+            )
+            if alert:
+                alerts.append(alert)
 
         # --- Posture / Head direction ---
         if pose_analysis and self.rules.get("posture", {}).get("enabled", True):
@@ -135,6 +107,91 @@ class CheatingEngine:
                     alerts.append(alert)
 
         return alerts
+
+    def _object_rule(
+        self, state: dict, track: Track, pose_analysis: Optional[dict], object_detections: list[dict],
+        camera_id: int, now: float, rule: dict, class_name: str, alert_type: str,
+    ) -> Optional[dict]:
+        """Alert when a prohibited object stays with this student for `alert_after_seconds`."""
+        proximity = rule.get("proximity_to_person", 150)
+        dets = [
+            d for d in object_detections
+            if self._normalize(d["class_name"]) == class_name
+            and self._is_near_person(track.bbox, d["bbox"], proximity)
+        ]
+        obj_state = state["objects"].setdefault(class_name, {"since": None, "last_seen": None})
+        if not dets:
+            # Short gaps (occlusion, missed frame) do not reset the timer
+            if obj_state["last_seen"] is not None and now - obj_state["last_seen"] > rule.get("grace_seconds", 1.0):
+                obj_state["since"] = obj_state["last_seen"] = None
+            return None
+
+        if obj_state["since"] is None:
+            obj_state["since"] = now
+        obj_state["last_seen"] = now
+        duration = now - obj_state["since"]
+        if duration < rule.get("alert_after_seconds", 1.0):
+            return None
+
+        best = max(dets, key=lambda d: d["confidence"])
+        in_hand = self._in_hand(best["bbox"], pose_analysis, rule.get("hand_radius_scale", 0.6))
+        label = class_name.replace("_", " ")
+        where = "in hand" if in_hand else "at desk"
+        return self._make_alert(
+            track.track_id, alert_type, "HIGH" if in_hand else "MEDIUM",
+            f"{label.capitalize()} {where} for {duration:.1f}s", camera_id,
+            {"object_bbox": best["bbox"], "confidence": best["confidence"], "in_hand": in_hand},
+        )
+
+    @staticmethod
+    def _normalize(name: str) -> str:
+        return "cell_phone" if name in ("cell phone", "cell-phones", "cell_phones") else name
+
+    @staticmethod
+    def _in_hand(obj_bbox: list, pose_analysis: Optional[dict], radius_scale: float) -> bool:
+        """Object centre within ~a hand's reach of a visible wrist (radius scales with shoulder width)."""
+        if not pose_analysis or "keypoints" not in pose_analysis:
+            return False
+        kpts = pose_analysis["keypoints"]
+        kconf = pose_analysis.get("keypoint_conf") or [1.0] * len(kpts)
+        if len(kpts) < 11:
+            return False
+        cx, cy = (obj_bbox[0] + obj_bbox[2]) / 2, (obj_bbox[1] + obj_bbox[3]) / 2
+        shoulders = [kpts[i] for i in (5, 6) if kconf[i] > 0.3]
+        shoulder_w = abs(shoulders[0][0] - shoulders[1][0]) if len(shoulders) == 2 else 0
+        radius = max(40.0, radius_scale * shoulder_w)
+        for i in (9, 10):  # left / right wrist
+            if kconf[i] > 0.3:
+                wx, wy = kpts[i]
+                if ((wx - cx) ** 2 + (wy - cy) ** 2) ** 0.5 <= radius:
+                    return True
+        return False
+
+    @staticmethod
+    def assign_objects(tracks: list[Track], pose_by_track: dict, objects: list[dict]) -> dict[int, list[dict]]:
+        """Give each object to the single nearest student (wrist if visible, else box centre).
+
+        Students share benches, so without this one phone would be blamed on every neighbour.
+        """
+        assigned: dict[int, list[dict]] = {t.track_id: [] for t in tracks}
+        for obj in objects:
+            ox, oy = (obj["bbox"][0] + obj["bbox"][2]) / 2, (obj["bbox"][1] + obj["bbox"][3]) / 2
+            best_id, best_d = None, float("inf")
+            for t in tracks:
+                points = []
+                pose = pose_by_track.get(t.track_id)
+                if pose and "keypoints" in pose:
+                    kconf = pose.get("keypoint_conf") or [1.0] * len(pose["keypoints"])
+                    points = [pose["keypoints"][i] for i in (9, 10) if len(pose["keypoints"]) > 10 and kconf[i] > 0.3]
+                if not points:
+                    x0, y0, x1, y1 = t.bbox
+                    points = [((x0 + x1) / 2, (y0 + y1) / 2)]
+                d = min(((px - ox) ** 2 + (py - oy) ** 2) ** 0.5 for px, py in points)
+                if d < best_d:
+                    best_id, best_d = t.track_id, d
+            if best_id is not None:
+                assigned[best_id].append(obj)
+        return assigned
 
     def _make_alert(
         self, track_id: int, alert_type: str, severity: str,

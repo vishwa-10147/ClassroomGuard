@@ -8,6 +8,13 @@ storage/
 runs/
 sample_videos/
 weights/
-*.pt
-*.engine
-*.onnx
+**/*.pt
+**/*.engine
+**/*.onnx
+# Training-only content: datasets, caches, training scripts and tests are not needed at runtime
+data/
+training/
+tests/
+*.npy
+*.cache
+.pytest_cache

@@ -8,6 +8,19 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+RECONNECT_AFTER_FAILURES = 50  # ~5 s of failed reads on a live stream
+
+
+def is_corrupt_frame(frame: np.ndarray, grey_fraction: float = 0.5) -> bool:
+    """True for decoder-corrupted frames (HEVC/H.264 missing references are filled mid-grey).
+
+    Such frames come from packet loss on RTSP or seeking in a file; the detector fires on the
+    smeared remains, so they must never reach it.
+    """
+    small = cv2.resize(frame, (64, 36), interpolation=cv2.INTER_AREA).astype(np.int16)
+    mid_grey = np.all(np.abs(small - 128) <= 4, axis=2)
+    return bool(mid_grey.mean() > grey_fraction)
+
 
 class CameraStream:
     def __init__(self, camera_id: int, source, resolution: tuple = (1920, 1080), fps: int = 30):
@@ -41,19 +54,36 @@ class CameraStream:
                      self.camera_id, self.source, self.resolution, self.target_fps)
         return True
 
+    def _is_file(self) -> bool:
+        return isinstance(self.source, str) and not self.source.isdigit() and "://" not in self.source
+
+    def _reopen(self) -> None:
+        logger.warning("Camera %s: no frames - reconnecting to %s", self.camera_id, self.source)
+        if self._cap:
+            self._cap.release()
+        self._cap = cv2.VideoCapture(self.source)
+        self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
     def _capture_loop(self):
         frame_interval = 1.0 / self.target_fps
+        failures = 0
         while self.running:
             t0 = time.time()
             ret, frame = self._cap.read()
-            if not ret:
-                # If reading a video file, rewind to start for 24-7 continuous stream
-                if isinstance(self.source, str) and not self.source.isdigit():
+            if not ret or frame is None:
+                if self._is_file():
+                    # Video files loop for continuous demo / test streams
                     self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    ret, frame = self._cap.read()
-                if not ret or frame is None:
-                    time.sleep(0.1)
                     continue
+                failures += 1
+                if failures >= RECONNECT_AFTER_FAILURES:
+                    self._reopen()
+                    failures = 0
+                time.sleep(0.1)
+                continue
+            failures = 0
+            if is_corrupt_frame(frame):
+                continue
 
             with self._lock:
                 self.frame = frame
