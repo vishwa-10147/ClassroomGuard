@@ -19,18 +19,21 @@ cameras:
 # === MODEL SETTINGS ===
 models:
   detection:
-    weights: "models/model_exam.pt"         # Exam multi-class model (phone, calculator, sheet, earbuds)
+    weights: "models/exam_detector.pt"      # cell_phone + calculator, trained by training/train_exam_detector.py
     fallback_weights: "models/yolo26m_custom.pt"
-    confidence: 0.15                         # Highly sensitive threshold for exam room
+    confidence: 0.10                         # pre-filter only; per-class thresholds below decide
+    class_confidence:                        # max-F1 thresholds picked on the val split (models/exam_detector.eval.json)
+      cell_phone: 0.34                       # val max-F1; on real footage lower values flag pens / desk tape
+      calculator: 0.59
     iou_threshold: 0.45
-    input_size: 1024                         # 1024px high-res for small under-desk objects
+    input_size: 1280                         # trained at 1280: phones are ~20-30px in CCTV frames
     device: 0
-    enhance_shadows: true                    # Dual CLAHE shadow-pass for under-desk hidden phones
+    enhance_shadows: false                   # second CLAHE pass doubles inference cost; model trained with colour jitter
 
-  pose:
+  pose:                                      # people (boxes + wrists) come from the pose model
     weights: "models/yolov8m-pose.pt"
     confidence: 0.5
-    input_size: 640
+    input_size: 960                          # 640 misses back-row students in a full hall
     device: 0
 
 # === CHEATING RULES (STRICT EXAM ENFORCEMENT) ===
@@ -38,9 +41,10 @@ cheating_rules:
   # Cell Phone Prohibition
   phone_usage:
     enabled: true
-    alert_after_frames: 2                   # Alert after 2 consecutive frames (~0.1s)
-    confidence_threshold: 0.15
-    proximity_to_person: 220
+    alert_after_seconds: 1.0                # phone must stay with the student this long
+    grace_seconds: 1.0                      # brief occlusions do not reset the timer
+    proximity_to_person: 220                # px around the student box
+    hand_radius_scale: 0.6                  # "in hand" = within 0.6 x shoulder width of a wrist (HIGH)
 
   # Under-Desk Hidden Phone (Gaze + Low Hands)
   under_desk_phone:
@@ -51,13 +55,17 @@ cheating_rules:
   # Calculator Usage Prohibition
   calculator_usage:
     enabled: true
-    alert_after_frames: 2
-    confidence_threshold: 0.35
-    allowed_sections: []                    # Empty = prohibited for all students
+    allowed: false                          # set true for exams where calculators are permitted
+    alert_after_seconds: 1.5
+    grace_seconds: 1.0
+    proximity_to_person: 220
+    hand_radius_scale: 0.6
 
   # Posture & Head Turn (Turning Back to Copy)
+  # Head-turn / looking-down cues: off by default. On fixed overhead cameras they fire on normal
+  # exam behaviour (writing, facing the invigilator); enable only after per-camera calibration.
   posture:
-    enabled: true
+    enabled: false
     head_turn_threshold: 25                 # 25 deg head turn
     head_turn_duration: 1.5                 # Alert after 1.5s head turn
     looking_down_threshold: 30              # Looking down into lap/sheets
@@ -78,7 +86,8 @@ false_positive_filter:
 # === ALERTS & DASHBOARD ===
 alerts:
   enabled: true
-  cooldown: 3.0                             # Short 3.0s cooldown to capture repeated infractions
+  cooldown: 30.0                            # seconds before the same student is re-alerted for the same cue
+  object_cooldown: 120.0                    # phone/calculator: one alert per student or desk every 2 minutes
 
 dashboard:
   enabled: true

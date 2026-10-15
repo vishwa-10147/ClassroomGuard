@@ -32,6 +32,8 @@ class YOLODetector:
         weights = self.config["weights"]
         fallback = self.config.get("fallback_weights", "yolo26m.pt")  # YOLO26m default
         self.config["device"] = resolve_device(self.config["device"])
+        # FP16 inference on CUDA (~2x throughput); quantize: 32 in the config forces full precision
+        self.half = self.config["device"] != "cpu" and int(self.config.get("quantize", 16)) == 16
 
         # Prefer TensorRT engine if available
         engine_path = str(Path(weights).with_suffix(".engine"))
@@ -73,6 +75,7 @@ class YOLODetector:
             iou=self.config["iou_threshold"],
             imgsz=self.config["input_size"],
             device=self.config["device"],
+            quantize=16 if self.half else None,  # FP16 on CUDA ("half" is deprecated)
             verbose=False,
         )
 
@@ -109,6 +112,7 @@ class YOLODetector:
                 iou=self.config["iou_threshold"],
                 imgsz=self.config["input_size"],
                 device=self.config["device"],
+            quantize=16 if self.half else None,  # FP16 on CUDA ("half" is deprecated)
                 verbose=False,
             )
             for r in shadow_results:
@@ -152,6 +156,10 @@ class YOLODetector:
                                 }
                             )
 
+        # Per-class thresholds (picked on the val split) decide what counts as a detection
+        class_conf = self.config.get("class_confidence") or {}
+        if class_conf:
+            detections = [d for d in detections if d["confidence"] >= class_conf.get(d["class_name"], conf)]
         return detections
 
     @staticmethod
@@ -221,7 +229,7 @@ class YOLODetector:
         logger.info("Exporting detection model to TensorRT FP16...")
         self.model.export(
             format="engine",
-            half=self.config.get("half", True),
+            quantize=16 if self.half else None,  # FP16 on CUDA ("half" is deprecated)
             imgsz=self.config["input_size"],
             workspace=self.config.get("workspace", 4) if hasattr(self.config, "get") else 4,
         )

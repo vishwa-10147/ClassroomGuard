@@ -183,20 +183,34 @@ DEFAULT_COOLDOWNS: dict[str, float] = {
 
 @dataclass
 class AlertDebouncer:
-    """Suppresses repeated alerts for the same person + violation type."""
+    """Suppresses repeated alerts for the same person + violation type.
+
+    Object alerts (phone / calculator) are also de-duplicated by where the object is: tracker
+    IDs can change when a student is briefly lost, but the phone on that desk is the same
+    incident and must not raise a new alert.
+    """
 
     cooldowns: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_COOLDOWNS))
     default_cooldown: float = 10.0
-    _last_alerts: dict[tuple[int, str], float] = field(default_factory=dict)
+    location_grid_px: int = 150
+    _last_alerts: dict[tuple, float] = field(default_factory=dict)
 
-    def should_alert(self, track_id: int, alert_type: str, now: Optional[float] = None) -> bool:
+    def should_alert(
+        self, track_id: int, alert_type: str, now: Optional[float] = None,
+        location: Optional[tuple[float, float]] = None,
+    ) -> bool:
         now = now if now is not None else time.time()
-        key = (track_id, alert_type)
-        last = self._last_alerts.get(key, 0.0)
         cooldown = self.cooldowns.get(alert_type, self.default_cooldown)
-        if now - last < cooldown:
+        keys: list[tuple] = [(track_id, alert_type)]
+        if location is not None:
+            gx, gy = int(location[0] // self.location_grid_px), int(location[1] // self.location_grid_px)
+            # neighbouring cells too, so an object near a cell border does not slip through
+            keys += [("loc", alert_type, gx + dx, gy + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+        if any(now - self._last_alerts.get(k, 0.0) < cooldown for k in keys):
             return False
-        self._last_alerts[key] = now
+        self._last_alerts[keys[0]] = now
+        if location is not None:
+            self._last_alerts[("loc", alert_type, gx, gy)] = now
         return True
 
     def reset(self, track_id: Optional[int] = None):
@@ -221,7 +235,13 @@ class FalsePositiveFilter:
             min_consecutive_frames=fp_cfg.get("min_consecutive_frames", 3),
         )
         self.duplicate_filter = DuplicateFilter()
-        self.debouncer = AlertDebouncer()
+        alert_cfg = config.get("alerts", {})
+        cooldown = float(alert_cfg.get("cooldown", 10.0))
+        object_cooldown = float(alert_cfg.get("object_cooldown", cooldown))
+        cooldowns = dict(DEFAULT_COOLDOWNS)
+        cooldowns.update({k: cooldown for k in cooldowns})
+        cooldowns.update({"phone_usage": object_cooldown, "calculator_usage": object_cooldown})
+        self.debouncer = AlertDebouncer(cooldowns=cooldowns, default_cooldown=cooldown)
         self.calibration_enabled = fp_cfg.get("confidence_calibration", True)
 
     def filter_detections(self, detections: list[dict]) -> list[dict]:
@@ -235,9 +255,12 @@ class FalsePositiveFilter:
         """Returns True if the object detection persists across enough frames."""
         return self.multi_frame.update(detection)
 
-    def should_alert(self, track_id: int, alert_type: str) -> bool:
-        """Debounce check: returns True only if enough time has elapsed."""
-        return self.debouncer.should_alert(track_id, alert_type)
+    def should_alert(self, track_id: int, alert_type: str, object_bbox: Optional[list] = None) -> bool:
+        """Debounce check: returns True only if enough time has elapsed (per student and per desk)."""
+        location = None
+        if object_bbox is not None:
+            location = ((object_bbox[0] + object_bbox[2]) / 2, (object_bbox[1] + object_bbox[3]) / 2)
+        return self.debouncer.should_alert(track_id, alert_type, location=location)
 
     def reset_track(self, track_id: int):
         self.debouncer.reset(track_id)

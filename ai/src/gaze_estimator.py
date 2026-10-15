@@ -4,7 +4,6 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
-import numpy as np
 
 # MediaPipe / YOLOv8-pose keypoint indices
 NOSE = 0

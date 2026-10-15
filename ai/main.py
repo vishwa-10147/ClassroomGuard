@@ -17,7 +17,6 @@ from src.pose_analyzer import PoseAnalyzer
 from src.tracker import ByteTracker, Track
 from src.alert_system import AlertSystem
 from src.dashboard_server import DashboardServer
-from pathlib import Path
 
 # Ensure logs directory exists before configuring file handlers
 Path("logs").mkdir(exist_ok=True)
@@ -121,27 +120,31 @@ class ClassroomGuard:
 
                 tracker, fp_filter, cheating_engine = self._camera_state(cam_id)
 
-                # 1. Detect objects (with false-positive filtering)
+                # 1. Detect prohibited objects (with false-positive filtering)
                 raw_detections = self.detector.detect(frame)
                 detections = fp_filter.filter_detections(raw_detections)
-
-                persons = [d for d in detections if d["class_name"] == "person"]
                 # Objects only count once they persist across consecutive frames
                 objects = [
                     d for d in detections
                     if d["class_name"] != "person" and fp_filter.verify_object_detection(d)
                 ]
 
-                # 2. Track students via ByteTracker
+                # 2. People come from the pose model (boxes + wrists), then ByteTrack
+                pose_analyses = self.pose_analyzer.full_analysis(frame)
+                persons = [
+                    {"bbox": p["bbox"], "confidence": p["box_conf"], "class_name": "person"}
+                    for p in pose_analyses
+                ]
                 tracked = tracker.update(persons)
 
-                # 3. Pose analysis per tracked student
-                pose_analyses = self.pose_analyzer.full_analysis(frame)
+                # 3. Match poses to tracks and give each object to its nearest student
+                pose_by_track = {t.track_id: self._match_pose_to_track(t, pose_analyses) for t in tracked}
+                objects_by_track = CheatingEngine.assign_objects(tracked, pose_by_track, objects)
 
-                # 4. Gaze estimation + match poses to tracks
+                # 4. Gaze estimation + rules per student
                 annotated_for_alerts = None
                 for track in tracked:
-                    best_pose = self._match_pose_to_track(track, pose_analyses)
+                    best_pose = pose_by_track[track.track_id]
 
                     # Gaze estimation from keypoints
                     head_direction = "forward"
@@ -160,14 +163,14 @@ class ClassroomGuard:
                                                 if best_pose else "unknown")
 
                     # 5. Evaluate cheating rules
-                    alerts = cheating_engine.evaluate(track, best_pose, objects, cam_id)
+                    alerts = cheating_engine.evaluate(track, best_pose, objects_by_track[track.track_id], cam_id)
 
                     # 6. Process alerts (with debounce + annotated frame for evidence)
                     if alerts and annotated_for_alerts is None:
                         annotated_for_alerts = self.detector.draw_detections(frame, detections)
                         annotated_for_alerts = self.pose_analyzer.draw_pose(annotated_for_alerts, pose_analyses)
                     for alert in alerts:
-                        if fp_filter.should_alert(track.track_id, alert["alert_type"]):
+                        if fp_filter.should_alert(track.track_id, alert["alert_type"], alert.get("object_bbox")):
                             self.alert_system.process_alert(alert, frame, annotated_for_alerts)
 
                 # 7. Draw annotations

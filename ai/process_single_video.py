@@ -14,7 +14,7 @@ import httpx
 from src.tracker import ByteTracker
 from src.gaze_estimator import GazeEstimator
 from src.false_positive_filter import FalsePositiveFilter
-from analyze_videos import analyze_video, seed_database, load_config
+from analyze_videos import analyze_video
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("process_single_video")
@@ -72,7 +72,7 @@ async def main():
         camera = resp.json()
         classroom_id = camera["classroomId"]
 
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timezone
         import json
         
         base_time = datetime.now(timezone.utc)

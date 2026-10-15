@@ -1,12 +1,10 @@
-import base64
 import logging
 import threading
 import time
-from typing import Optional
 
 import cv2
 import numpy as np
-from flask import Flask, Response, jsonify, render_template, send_from_directory
+from flask import Flask, Response, jsonify, render_template
 from flask_socketio import SocketIO
 
 logger = logging.getLogger(__name__)
