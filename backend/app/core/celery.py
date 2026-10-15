@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from backend.app.core.config import settings
 from celery import Celery
+from celery.schedules import crontab
 
 broker_url = settings.redis_url.replace("/0", "/1") if settings.use_redis else "memory://"
 result_backend = settings.redis_url.replace("/0", "/2") if settings.use_redis else "cache+memory://"
@@ -25,4 +26,22 @@ celery_app.conf.update(
     task_time_limit=900,
 )
 
-celery_app.autodiscover_tasks(["app.tasks"])
+celery_app.conf.include = [
+    "backend.app.tasks.alert_tasks",
+    "backend.app.tasks.compliance_tasks",
+    "backend.app.tasks.retention_tasks",
+    "backend.app.tasks.scheduled",
+    "backend.app.tasks.webhook_tasks",
+]
+
+# Run by the celery-beat service (docker-compose.yml)
+celery_app.conf.beat_schedule = {
+    "retention-daily": {
+        "task": "backend.app.tasks.scheduled.scheduled_retention_enforcement",
+        "schedule": crontab(hour=2, minute=0),
+    },
+    "evidence-cleanup-daily": {
+        "task": "backend.app.tasks.scheduled.scheduled_cleanup_old_evidence",
+        "schedule": crontab(hour=3, minute=0),
+    },
+}

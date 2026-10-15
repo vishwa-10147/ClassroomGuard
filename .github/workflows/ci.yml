@@ -68,7 +68,7 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://classroomguard:classroomguard_dev@localhost:5432/classroomguard
           JWT_SECRET: ci-test-secret
-        run: cd backend && alembic upgrade head
+        run: python -m backend.scripts.migrate
 
       - name: Seed test data and start API
         env:
@@ -102,11 +102,11 @@ jobs:
       - name: Install frontend deps for testing
         run: npm ci
       - name: Run frontend tests
-        run: npm run test || echo "Frontend tests not fully configured yet"
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-      - name: Run Playwright tests
-        run: npx playwright test || echo "Playwright tests not fully configured yet"
+        run: npx jest src
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run end-to-end tests (Vite dev server -> API started above)
+        run: npx playwright test
 
   build-docker:
     needs: [lint-and-typecheck, test]
@@ -114,8 +114,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
-        run: docker build -f backend/Dockerfile -t classroomguard-backend .
+        run: docker build -f backend/Dockerfile -t classroomguard-backend backend
       - name: Build frontend image
         run: docker build -f Dockerfile -t classroomguard-frontend .
       - name: Build AI image
-        run: docker build -f ai/Dockerfile -t classroomguard-ai .
+        run: docker build -f ai/Dockerfile -t classroomguard-ai ai

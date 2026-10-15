@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import cv2
+import numpy as np
 from backend.app.api.dependencies import get_db, require_permission, require_permission_or_service
 from backend.app.core.audit import log_audit
 from backend.app.core.limits import check_camera_limit
@@ -20,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(
     prefix="/api/v1/cameras",
@@ -253,21 +255,18 @@ async def test_camera_connection(
         }
 
     try:
-        cap = cv2.VideoCapture(camera.stream_url, cv2.CAP_FFMPEG)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        opened, frame = await run_in_threadpool(_grab_frame, camera.stream_url)
 
-        if not cap.isOpened():
+        if not opened:
             return {
                 "success": False,
-                "message": f"Could not open stream: {camera.stream_url}",
+                # never echo the URL: RTSP URLs usually embed camera credentials
+                "message": "Could not open the camera stream",
                 "camera_id": camera.camera_id,
                 "status": "offline",
             }
 
-        ok, frame = cap.read()
-        cap.release()
-
-        if not ok or frame is None:
+        if frame is None:
             return {
                 "success": False,
                 "message": "Stream opened but could not read a frame",
@@ -286,16 +285,41 @@ async def test_camera_connection(
     except Exception as e:
         return {
             "success": False,
-            "message": f"Connection error: {str(e)}",
+            "message": f"Connection error: {type(e).__name__}",
             "camera_id": camera.camera_id,
             "status": "offline",
         }
 
 
+CAPTURE_TIMEOUT_MS = 5000
+
+
+def _open_capture(stream_url: str) -> cv2.VideoCapture:
+    """Open a stream with bounded connect/read timeouts (an offline camera must not hang a request)."""
+    cap = cv2.VideoCapture(
+        stream_url,
+        cv2.CAP_FFMPEG,
+        [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, CAPTURE_TIMEOUT_MS, cv2.CAP_PROP_READ_TIMEOUT_MSEC, CAPTURE_TIMEOUT_MS],
+    )
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    return cap
+
+
+def _grab_frame(stream_url: str) -> tuple[bool, np.ndarray | None]:
+    """Blocking: returns (opened, frame or None). Call through run_in_threadpool."""
+    cap = _open_capture(stream_url)
+    try:
+        if not cap.isOpened():
+            return False, None
+        ok, frame = cap.read()
+        return True, frame if ok else None
+    finally:
+        cap.release()
+
+
 def _mjpeg_gen(stream_url: str, max_fps: int = 15):
     """Yield MJPEG frames from an RTSP stream."""
-    cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    cap = _open_capture(stream_url)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
@@ -307,8 +331,7 @@ def _mjpeg_gen(stream_url: str, max_fps: int = 15):
             ok, frame = cap.read()
             if not ok or frame is None:
                 cap.release()
-                cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                cap = _open_capture(stream_url)
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                 ok, frame = cap.read()
@@ -377,12 +400,9 @@ async def camera_snapshot(
         raise HTTPException(status_code=400, detail="No stream URL configured")
 
     try:
-        cap = cv2.VideoCapture(camera.stream_url, cv2.CAP_FFMPEG)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        ok, frame = cap.read()
-        cap.release()
+        _, frame = await run_in_threadpool(_grab_frame, camera.stream_url)
 
-        if not ok or frame is None:
+        if frame is None:
             raise HTTPException(status_code=503, detail="Could not read frame from stream")
 
         _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -390,7 +410,7 @@ async def camera_snapshot(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Stream error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Stream error") from e
 
 @router.delete(
     "/{camera_id}",

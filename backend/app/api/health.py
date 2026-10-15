@@ -27,15 +27,13 @@ async def _check_database() -> dict[str, Any]:
 
 async def _check_redis() -> dict[str, Any]:
     status = await redis_health_check()
-    return {"status": "up" if status == "connected" else "down", "latency_ms": 0}
-
-
-async def _check_gpu() -> dict[str, Any]:
-    return {"status": "up", "utilization": 0}
+    if status == "disabled":  # USE_REDIS=false is a valid single-node setup
+        return {"status": "disabled"}
+    return {"status": "up" if status == "connected" else "down"}
 
 
 def _overall_status(checks: dict[str, Any]) -> str:
-    statuses = [c.get("status", "unknown") for c in checks.values()]
+    statuses = [c.get("status", "unknown") for c in checks.values() if c.get("status") != "disabled"]
     if all(s == "up" for s in statuses):
         return "healthy"
     if any(s == "down" for s in statuses):
@@ -57,7 +55,6 @@ async def health_readiness() -> dict[str, Any]:
     checks = {
         "database": await _check_database(),
         "redis": await _check_redis(),
-        "gpu": await _check_gpu(),
     }
     return {
         "status": _overall_status(checks),
@@ -72,7 +69,6 @@ async def health_detailed() -> dict[str, Any]:
     checks = {
         "database": await _check_database(),
         "redis": await _check_redis(),
-        "gpu": await _check_gpu(),
     }
     return {
         "status": _overall_status(checks),

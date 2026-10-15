@@ -1,7 +1,4 @@
 @echo off
-cd /d "%~dp0\.."
-
-echo Running pending migrations...
-alembic upgrade head
-
-echo Migrations complete.
+rem Apply database migrations (stamps pre-migration databases first).
+cd /d "%~dp0\..\.."
+python -m backend.scripts.migrate
