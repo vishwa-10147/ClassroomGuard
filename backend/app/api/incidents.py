@@ -9,7 +9,6 @@ from backend.app.schemas.incident import (
     IncidentResponse,
     IncidentUpdate,
 )
-from backend.app.core.cache import cache_response
 from fastapi import APIRouter, Depends, Request, HTTPException, Query, Request
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,9 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 router = APIRouter(prefix="/api/v1/incidents", tags=["Incidents"])
 
 
-@router.get("", response_model=
-@cache_response(ttl=60, prefix="incidents")
-IncidentListResponse)
+@router.get("", response_model=IncidentListResponse)
 async def list_incidents(
     request: Request,
     status: str | None = Query(None),

@@ -39,7 +39,7 @@ def _webhook_response(wh: Webhook) -> dict:
 async def create_webhook(
     body: WebhookCreate,
     db: AsyncSession = Depends(get_db),
-    user=Depends(require_permission("webhooks.manage")),
+    user=Depends(require_permission("webhooks:manage")),
 ):
     webhook = Webhook(
         name=body.name,
@@ -62,7 +62,7 @@ async def list_webhooks(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("webhooks.view")),
+    _user=Depends(require_permission("webhooks:view")),
 ):
     query = (
         select(Webhook)
@@ -77,7 +77,7 @@ async def list_webhooks(
 @router.get("/count")
 async def webhook_count(
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("webhooks.view")),
+    _user=Depends(require_permission("webhooks:view")),
 ):
     total = await db.scalar(select(func.count()).select_from(Webhook))
     active = await db.scalar(
@@ -90,7 +90,7 @@ async def webhook_count(
 async def get_webhook(
     webhook_id: str,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("webhooks.view")),
+    _user=Depends(require_permission("webhooks:view")),
 ):
     result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
     webhook = result.scalar_one_or_none()
@@ -104,7 +104,7 @@ async def update_webhook(
     webhook_id: str,
     body: WebhookUpdate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("webhooks.manage")),
+    _user=Depends(require_permission("webhooks:manage")),
 ):
     result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
     webhook = result.scalar_one_or_none()
@@ -124,7 +124,7 @@ async def update_webhook(
 async def delete_webhook(
     webhook_id: str,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("webhooks.manage")),
+    _user=Depends(require_permission("webhooks:manage")),
 ):
     result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
     webhook = result.scalar_one_or_none()
@@ -138,7 +138,7 @@ async def delete_webhook(
 async def test_webhook(
     webhook_id: str,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("webhooks.manage")),
+    _user=Depends(require_permission("webhooks:manage")),
 ):
     result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
     webhook = result.scalar_one_or_none()
@@ -159,7 +159,7 @@ async def list_deliveries(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("webhooks.view")),
+    _user=Depends(require_permission("webhooks:view")),
 ):
     result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
     if not result.scalar_one_or_none():

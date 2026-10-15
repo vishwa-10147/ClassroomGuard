@@ -8,7 +8,6 @@ from backend.app.schemas.event import (
     DetectionEventListResponse,
     DetectionEventResponse,
 )
-from backend.app.core.cache import cache_response
 from fastapi import APIRouter, Depends, Request, HTTPException, Query
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,9 +56,7 @@ def _enrich_event(event, classroom_name=None, camera_name=None):
     return event
 
 
-@router.get("", response_model=
-@cache_response(ttl=60, prefix="events")
-DetectionEventListResponse)
+@router.get("", response_model=DetectionEventListResponse)
 async def list_events(
     request: Request,
     classroom_id: str | None = Query(None),

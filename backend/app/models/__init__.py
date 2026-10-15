@@ -3,7 +3,7 @@ from backend.app.models.audit_log import AuditLog
 from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
 from backend.app.models.compliance_log import ComplianceLog
-from backend.app.models.consent import Consent
+from backend.app.models.consent import UserConsent
 from backend.app.models.detection_event import DetectionEvent
 from backend.app.models.incident import Incident
 from backend.app.models.organization import Organization
@@ -34,6 +34,6 @@ __all__ = [
     "Webhook",
     "WebhookDelivery",
     "ComplianceLog",
-    "Consent",
+    "UserConsent",
     "RetentionPolicy",
 ]
