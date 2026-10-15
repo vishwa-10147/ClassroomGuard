@@ -1,0 +1,26 @@
+# HTTPS entry point for on-premise installs (docker-compose.https.yml).
+#
+# SITE_ADDRESS  the name or IP people type in the browser, e.g. classroomguard.college.edu
+#               or 10.0.5.20. Set in .env.
+# CADDY_TLS     how the certificate is obtained:
+#                 internal                                    self-signed by Caddy's own CA (default; trust
+#                                                             deploy/caddy/data/caddy/pki/authorities/local/root.crt)
+#                 /certs/fullchain.pem /certs/privkey.pem     certificate issued by the college (files in deploy/certs)
+#                 admin@college.edu                           Let's Encrypt, if the name is public and ports 80/443 reachable
+
+{$SITE_ADDRESS} {
+	tls {$CADDY_TLS:internal}
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	reverse_proxy frontend:80
+}
+
+# Plain HTTP on the same name redirects to HTTPS
+http://{$SITE_ADDRESS} {
+	redir https://{host}{uri} permanent
+}

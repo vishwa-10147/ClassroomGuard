@@ -1,4 +1,5 @@
 import json
+import os
 import platform
 import shutil
 from datetime import UTC, datetime
@@ -6,6 +7,7 @@ from typing import Any
 
 from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.audit import log_audit
+from backend.app.core.config import settings
 from backend.app.core.database import engine
 from backend.app.models.system_setting import SystemSetting
 from backend.app.models.user import User
@@ -152,7 +154,9 @@ def _get_gpu_info() -> dict[str, Any]:
 
 def _get_storage_info() -> dict[str, Any]:
     try:
-        usage = shutil.disk_usage("/")
+        # The disk that holds evidence and recordings is the one that fills up
+        path = settings.storage_path if os.path.isdir(settings.storage_path) else "/"
+        usage = shutil.disk_usage(path)
         return {
             "total_gb": round(usage.total / (1024**3), 2),
             "used_gb": round(usage.used / (1024**3), 2),

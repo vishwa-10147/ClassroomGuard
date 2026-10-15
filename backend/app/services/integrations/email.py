@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-import logging
-
-logger = logging.getLogger(__name__)
+from backend.app.core.mailer import send_email
 
 
 async def send_alert_email(to_email: str, alert: dict) -> bool:
-    """Stub email sender — logs the email for now.
-
-    Replace with a real SMTP/SES integration when ready.
-    """
-    logger.info(
-        "EMAIL NOTIFICATION → %s | Title: %s | Severity: %s | %s",
-        to_email,
-        alert.get("title"),
-        alert.get("severity"),
-        alert.get("description"),
+    """Email an alert summary to a staff member."""
+    subject = f"[ClassroomGuard] {str(alert.get('severity', '')).upper()} alert: {alert.get('title', 'New alert')}"
+    body = (
+        f"{alert.get('title', 'New alert')}\n\n"
+        f"Severity: {alert.get('severity', '-')}\n"
+        f"{alert.get('description') or ''}\n\n"
+        "Open ClassroomGuard to review the evidence and acknowledge the alert."
     )
-    return True
+    return await send_email(to_email, subject, body)

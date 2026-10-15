@@ -26,6 +26,14 @@ x-backend-env: &backend-env
   USE_REDIS: "true"
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env (32+ random characters)}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM: ${SMTP_FROM:-ClassroomGuard <no-reply@localhost>}
+  SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+  SMTP_SSL: ${SMTP_SSL:-false}
+  TZ: ${TZ:-Asia/Kolkata}
 
 services:
   postgres:
@@ -89,7 +97,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      DB_NULL_POOL: "true"
     volumes:
       - ./storage:/app/storage
     networks: [classguard-net]
@@ -104,7 +114,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      DB_NULL_POOL: "true"
     networks: [classguard-net]
     healthcheck:
       disable: true
@@ -127,6 +139,7 @@ services:
 
   ai:
     profiles: ["ai"]
+    hostname: ${AI_ENGINE_NAME:-classroomguard-ai}   # shown on the status endpoint
     build:
       context: ./ai
       dockerfile: Dockerfile

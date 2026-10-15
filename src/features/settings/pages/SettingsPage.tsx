@@ -22,6 +22,7 @@ import { Input, Select, Toggle } from '@/components/ui/Input';
 import { Badge, StatusIndicator } from '@/components/ui/Badge';
 import { settingsService, SystemSettings } from '@/services/api/settingsService';
 import { webhookService, Webhook } from '@/services/api/webhookService';
+import { apiClient } from '@/services/api/client';
 
 const tabs = [
   { id: 'general', label: 'General', icon: Settings },
@@ -54,6 +55,12 @@ export default function SettingsPage() {
     twoFactorEnabled: false,
   });
   const [loading, setLoading] = useState(true);
+  const [health, setHealth] = useState<{
+    aiOnline: number | null;
+    aiDetail: string | null;
+    storagePercent: number | null;
+    storageFreeGb: number | null;
+  }>({ aiOnline: null, aiDetail: null, storagePercent: null, storageFreeGb: null });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -72,6 +79,22 @@ export default function SettingsPage() {
       .finally(() => setLoading(false));
 
     loadWebhooks();
+
+    // Live system figures (no placeholder values)
+    Promise.allSettled([apiClient.get('/status'), apiClient.get('/system/health')]).then(([status, sys]) => {
+      const engines: { engine: string; seconds_ago: number; cameras: number; fps: number }[] =
+        status.status === 'fulfilled' ? status.value.data.aiEngines ?? [] : [];
+      const live = engines.filter((e) => e.seconds_ago <= 90);
+      const storage = sys.status === 'fulfilled' ? sys.value.data.storage : null;
+      setHealth({
+        aiOnline: live.length,
+        aiDetail: live.length
+          ? live.map((e) => `${e.engine}: ${e.cameras} camera(s)`).join(', ')
+          : 'No AI engine has reported in the last 90 seconds',
+        storagePercent: storage?.percent_used ?? null,
+        storageFreeGb: storage?.free_gb ?? null,
+      });
+    });
   }, []);
 
   const loadWebhooks = async () => {
@@ -200,23 +223,30 @@ export default function SettingsPage() {
                   <Cpu className="w-8 h-8 text-brand-500" />
                   <div className="flex-1">
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="font-medium text-cg-text-primary">GPU Utilization</span>
-                      <span className="text-cg-text-secondary">78%</span>
+                      <span className="font-medium text-cg-text-primary">AI engines</span>
+                      <span className="text-cg-text-secondary">
+                        {health.aiOnline === null ? '…' : `${health.aiOnline} online`}
+                      </span>
                     </div>
-                    <div className="w-full bg-cg-bg-surface rounded-full h-2">
-                      <div className="bg-brand-500 h-2 rounded-full" style={{ width: '78%' }} />
-                    </div>
+                    <p className="text-xs text-cg-text-tertiary">
+                      {health.aiDetail ?? 'Engines report every 30 seconds'}
+                    </p>
                   </div>
                 </div>
                 <div className="bg-cg-bg-tertiary p-4 rounded-lg border border-cg-border-default flex items-center gap-4">
                   <HardDrive className="w-8 h-8 text-brand-500" />
                   <div className="flex-1">
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="font-medium text-cg-text-primary">Storage Space</span>
-                      <span className="text-cg-text-secondary">45%</span>
+                      <span className="font-medium text-cg-text-primary">Evidence storage</span>
+                      <span className="text-cg-text-secondary">
+                        {health.storagePercent === null ? '…' : `${health.storagePercent}% used · ${health.storageFreeGb} GB free`}
+                      </span>
                     </div>
                     <div className="w-full bg-cg-bg-surface rounded-full h-2">
-                      <div className="bg-brand-500 h-2 rounded-full" style={{ width: '45%' }} />
+                      <div
+                        className={cn('h-2 rounded-full', (health.storagePercent ?? 0) > 85 ? 'bg-cg-status-error' : 'bg-brand-500')}
+                        style={{ width: `${health.storagePercent ?? 0}%` }}
+                      />
                     </div>
                   </div>
                 </div>

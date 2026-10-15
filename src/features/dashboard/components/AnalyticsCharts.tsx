@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '@/components/providers/RealTimeProvider';
 
 import { useState, useEffect } from 'react';
 import {
@@ -60,6 +61,9 @@ export function AnalyticsCharts() {
   const [cameraUptime, setCameraUptime] = useState<UptimeBucket[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [reloadKey, setReloadKey] = useState(0);
+  useLiveRefresh(['detection'], () => setReloadKey((k) => k + 1), 3000);
+
   useEffect(() => {
     async function fetchData() {
       try {
@@ -108,11 +112,11 @@ export function AnalyticsCharts() {
           .sort((a, b) => b.value - a.value);
         setEventsByType(typeData);
 
-        // Camera uptime
+        // Live frame rate per camera, as reported by the AI engine heartbeat (0 = offline)
         if (Array.isArray(cameras)) {
           const uptimeData: UptimeBucket[] = cameras.map((cam: any) => ({
-            name: cam.camera_id || cam.name || cam.id,
-            uptime: cam.status === 'online' ? 99.9 : cam.status === 'connecting' ? 45.2 : cam.status === 'offline' ? 0 : 98.0,
+            name: cam.cameraId || cam.camera_id || cam.name || cam.id,
+            uptime: cam.status === 'online' ? Number(cam.fps) || 0 : 0,
           }));
           setCameraUptime(uptimeData);
         }
@@ -123,7 +127,7 @@ export function AnalyticsCharts() {
       }
     }
     fetchData();
-  }, []);
+  }, [reloadKey]);
 
   if (loading) {
     return (
@@ -251,10 +255,10 @@ export function AnalyticsCharts() {
           )}
         </div>
 
-        {/* Camera Uptime */}
+        {/* Live camera frame rate */}
         <div className="card p-4 lg:col-span-2">
           <h4 className="mb-3 text-sm font-medium text-cg-text-secondary">
-            Camera Uptime (%)
+            Camera frame rate (live)
           </h4>
           {cameraUptime.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-sm text-cg-text-tertiary">
@@ -271,7 +275,7 @@ export function AnalyticsCharts() {
                   />
                   <XAxis
                     type="number"
-                    domain={[0, 100]}
+                    domain={[0, 'auto']}
                     axisLine={false}
                     tickLine={false}
                     tick={{ fill: '#5A6478', fontSize: 10 }}
@@ -287,20 +291,14 @@ export function AnalyticsCharts() {
                   <Tooltip contentStyle={chartTooltipStyle} />
                   <Bar
                     dataKey="uptime"
-                    name="Uptime %"
+                    name="Frames / s"
                     radius={[0, 3, 3, 0]}
                     maxBarSize={16}
                   >
                     {cameraUptime.map((entry) => (
                       <Cell
                         key={entry.name}
-                        fill={
-                          entry.uptime >= 99
-                            ? '#22C55E'
-                            : entry.uptime >= 90
-                              ? '#F59E0B'
-                              : '#EF4444'
-                        }
+                        fill={entry.uptime >= 5 ? '#22C55E' : entry.uptime > 0 ? '#F59E0B' : '#EF4444'}
                       />
                     ))}
                   </Bar>

@@ -1,3 +1,4 @@
+import { AuthedImage } from '@/components/shared/AuthedImage';
 import { Image } from 'lucide-react';
 
 interface EvidenceItem {
@@ -31,7 +32,7 @@ export function EvidenceGrid({ items, onSelect }: EvidenceGridProps) {
           onClick={() => onSelect(item)}
           className="group relative aspect-video bg-cg-bg-tertiary rounded-lg overflow-hidden border border-cg-border-default hover:border-brand-500 transition-colors"
         >
-          <img
+          <AuthedImage
             src={item.url}
             alt={item.filename}
             className="w-full h-full object-cover"

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Building, MapPin, Users, Video, Plus, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { cameraService } from '@/services/api/cameraService';
 import { classroomService } from '@/services/api/classroomService';
 import type { Classroom } from '@/types/classroom.types';
 import { useAuthStore } from '@/stores/authStore';
@@ -15,6 +16,7 @@ export default function ClassroomsPage() {
   const { user } = useAuthStore();
   const canManageClassrooms = hasPermission(user?.role || 'viewer', PERMISSIONS.MANAGE_CLASSROOMS);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [cameraStats, setCameraStats] = useState<Record<string, { total: number; online: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,8 +36,19 @@ export default function ClassroomsPage() {
       try {
         setLoading(true);
         setError(null);
-        const data = await classroomService.getAll();
-        if (mounted) setClassrooms(data);
+        const [data, cameras] = await Promise.all([classroomService.getAll(), cameraService.getAll()]);
+        if (mounted) {
+          setClassrooms(data);
+          setCameraStats(
+            cameras.reduce<Record<string, { total: number; online: number }>>((acc, cam) => {
+              if (!cam.classroomId) return acc;
+              const entry = (acc[cam.classroomId] ??= { total: 0, online: 0 });
+              entry.total += 1;
+              if (cam.status === 'online') entry.online += 1;
+              return acc;
+            }, {})
+          );
+        }
       } catch {
         if (mounted) setError('Unable to load classrooms from the server.');
       } finally {
@@ -136,7 +149,7 @@ export default function ClassroomsPage() {
                     Cameras
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
-                    Occupancy
+                    Seats
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cg-text-muted uppercase tracking-wider">
                     Status
@@ -148,10 +161,6 @@ export default function ClassroomsPage() {
               </thead>
               <tbody className="divide-y divide-cg-border-default">
                 {filteredClassrooms.map((classroom) => {
-                  const occupancy =
-                    classroom.totalSeats > 0
-                      ? Math.round((classroom.occupiedSeats / classroom.totalSeats) * 100)
-                      : 0;
                   return (
                     <tr key={classroom.id} className="hover:bg-cg-bg-tertiary transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -185,25 +194,17 @@ export default function ClassroomsPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center text-sm text-cg-text-primary">
                           <Video className="w-4 h-4 mr-1 text-cg-text-muted" />
-                          {classroom.cameraId ? '1 Connected' : '0 Connected'}
+                          {cameraStats[classroom.id]
+                            ? `${cameraStats[classroom.id].online} / ${cameraStats[classroom.id].total} online`
+                            : 'No cameras'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-24 h-2 bg-cg-bg-tertiary rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-brand-500 rounded-full"
-                              style={{ width: `${occupancy}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-cg-text-secondary font-medium">
-                            {classroom.occupiedSeats}/{classroom.totalSeats}
-                          </span>
-                        </div>
+                        <span className="text-sm text-cg-text-primary">{classroom.totalSeats}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant="status" status={classroom.activeDetections > 0 ? 'online' : 'offline'}>
-                          {classroom.activeDetections > 0 ? 'Active' : 'Inactive'}
+                        <Badge variant="status" status={(cameraStats[classroom.id]?.online ?? 0) > 0 ? 'online' : 'offline'}>
+                          {(cameraStats[classroom.id]?.online ?? 0) > 0 ? 'Monitoring' : 'Not monitored'}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

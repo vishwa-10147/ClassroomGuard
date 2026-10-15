@@ -1,19 +1,17 @@
 from datetime import datetime
 
 from backend.app.api.dependencies import get_db, require_permission, require_permission_or_service
-from backend.app.api.notifications import send_push_notification
 from backend.app.core.audit import log_audit
-from backend.app.core.websocket import manager
 from backend.app.models.alert import Alert
 from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
-from backend.app.models.push_token import PushToken
 from backend.app.models.user import User
 from backend.app.schemas.alert import (
     AlertAssign,
     AlertCreate,
     AlertResponse,
 )
+from backend.app.services.alerting import create_alert_and_notify
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +26,8 @@ async def create_alert(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission_or_service("alerts:write")),
 ):
-    alert = Alert(
+    return await create_alert_and_notify(
+        db,
         title=body.title,
         description=body.description,
         severity=body.severity,
@@ -37,55 +36,6 @@ async def create_alert(
         camera_id=body.camera_id,
         event_id=body.event_id,
     )
-    db.add(alert)
-    await db.commit()
-    await db.refresh(alert)
-
-    try:
-        result = await db.execute(
-            select(PushToken.token).where(PushToken.is_active)
-        )
-        tokens = [row[0] for row in result.all()]
-        for token in tokens:
-            await send_push_notification(
-                token=token,
-                title=alert.title,
-                body=alert.description,
-                data={"alert_id": alert.id, "severity": alert.severity},
-            )
-    except Exception:
-        pass
-
-    await manager.broadcast({
-        "type": "alert",
-        "payload": {
-            "id": str(alert.id),
-            "title": alert.title,
-            "description": alert.description,
-            "severity": alert.severity,
-            "status": alert.status,
-            "classroom_id": str(alert.classroom_id) if alert.classroom_id else None,
-            "camera_id": str(alert.camera_id) if alert.camera_id else None,
-            "created_at": alert.created_at.isoformat() if alert.created_at else None,
-        },
-    })
-
-    try:
-        from backend.app.core.webhook_dispatcher import dispatch_event
-        await dispatch_event("alert.created", {
-            "id": str(alert.id),
-            "title": alert.title,
-            "description": alert.description,
-            "severity": alert.severity,
-            "status": alert.status,
-            "classroom_id": str(alert.classroom_id) if alert.classroom_id else None,
-            "camera_id": str(alert.camera_id) if alert.camera_id else None,
-            "created_at": alert.created_at.isoformat() if alert.created_at else None,
-        })
-    except Exception:
-        pass
-
-    return alert
 
 
 def _enrich_alert(alert, classroom_name=None, camera_name=None):

@@ -1,0 +1,4 @@
+# Certificates issued by the college (when CADDY_TLS points at files here).
+# Do not commit real keys.
+*
+!.gitignore

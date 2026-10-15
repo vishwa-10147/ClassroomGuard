@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '@/components/providers/RealTimeProvider';
 import {
   Camera,
   CameraOff,
@@ -26,7 +27,11 @@ export function SystemOverview() {
 
   useEffect(() => {
     systemStore.fetchRealData();
-  }, []);
+    systemStore.fetchAiStatus();
+    const timer = window.setInterval(() => systemStore.fetchRealData(), 60_000);
+    return () => window.clearInterval(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useLiveRefresh(['alert', 'detection'], () => systemStore.fetchRealData());
 
   const metrics: MetricItem[] = [
     {
@@ -50,26 +55,24 @@ export function SystemOverview() {
       value: systemStore.activeAlerts,
       icon: <AlertTriangle className="h-5 w-5" />,
       status: systemStore.activeAlerts > 0 ? 'warning' : 'online',
-      change: { value: 2, direction: 'up' },
     },
     {
       label: 'Detections Today',
       value: systemStore.totalDetectionsToday,
       icon: <Zap className="h-5 w-5" />,
       status: 'info',
-      change: { value: 12, direction: 'up' },
     },
     {
-      label: 'AI Processing',
-      value: systemStore.activeProcessingJobs,
+      label: 'AI Engines Online',
+      value: systemStore.aiEnginesOnline,
       icon: <Cpu className="h-5 w-5" />,
-      status: systemStore.activeProcessingJobs > 0 ? 'processing' : 'online',
+      status: systemStore.aiEnginesOnline > 0 ? 'online' : 'error',
     },
     {
-      label: 'People Detected',
+      label: 'Phones Detected Today',
       value: systemStore.uniquePeopleDetected,
       icon: <Users className="h-5 w-5" />,
-      status: 'info',
+      status: systemStore.uniquePeopleDetected > 0 ? 'warning' : 'info',
     },
   ];
 

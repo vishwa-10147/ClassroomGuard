@@ -1,0 +1,15 @@
+# Normalise line endings so scripts and configs work on Linux servers even when the
+# repository was cloned on Windows.
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.conf text eol=lf
+Dockerfile text eol=lf
+Caddyfile text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.pt binary
+*.jpg binary
+*.png binary

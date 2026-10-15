@@ -14,6 +14,8 @@ export default defineConfig({
   use: {
     baseURL: externalBaseUrl ?? 'http://localhost:3000',
     trace: 'retain-on-failure',
+    // For on-prem installs using Caddy's internal (self-signed) certificate
+    ignoreHTTPSErrors: !!process.env.E2E_IGNORE_HTTPS_ERRORS,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: externalBaseUrl

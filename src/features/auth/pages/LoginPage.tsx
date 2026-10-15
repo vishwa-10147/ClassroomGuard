@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate, Navigate, useLocation } from 'react-router-dom';
+import { useNavigate, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Shield, Eye, EyeOff } from 'lucide-react';
-import { Button, Input, StatusIndicator } from '@/components/ui';
+import { Button, Input } from '@/components/ui';
 
 /** Page the user was sent away from by ProtectedRoute, so login returns them there. */
 function useRedirectTarget(): string {
@@ -95,25 +95,19 @@ export function LoginForm() {
       </Button>
 
       <div className="text-center">
-        <button
-          type="button"
+        <Link
+          to="/forgot-password"
           className="text-xs text-cg-text-secondary hover:text-cg-brand transition-colors"
         >
           Forgot password?
-        </button>
+        </Link>
       </div>
     </form>
   );
 }
 
-export function LoginPage() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const redirectTo = useRedirectTarget();
-
-  if (isAuthenticated) {
-    return <Navigate to={redirectTo} replace />;
-  }
-
+/** Branded centred card shared by the sign-in and password-reset pages. */
+export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-cg-bg-primary p-4">
       {/* Background pattern */}
@@ -127,31 +121,31 @@ export function LoginPage() {
       />
 
       <div className="relative z-10 w-full max-w-sm">
-        {/* Brand */}
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center justify-center rounded-xl bg-cg-brand-subtle p-3">
             <Shield className="h-8 w-8 text-cg-brand" />
           </div>
-          <h1 className="text-2xl font-semibold text-cg-text-primary">
-            ClassroomGuard
-          </h1>
-          <p className="mt-1.5 text-sm text-cg-text-secondary">
-            AI-Powered Classroom Intelligence
-          </p>
+          <h1 className="text-2xl font-semibold text-cg-text-primary">ClassroomGuard</h1>
+          <p className="mt-1.5 text-sm text-cg-text-secondary">AI-Powered Classroom Intelligence</p>
         </div>
 
-        {/* Login card */}
-        <div className="card p-6">
-          <LoginForm />
-        </div>
-
-        {/* Footer */}
-        <div className="mt-6 flex items-center justify-center gap-3 text-xs text-cg-text-tertiary">
-          <StatusIndicator status="online" label="System Online" size="sm" />
-          <span className="text-cg-border-strong">·</span>
-          <span className="font-mono">v2.4.1</span>
-        </div>
+        <div className="card p-6">{children}</div>
       </div>
     </div>
+  );
+}
+
+export function LoginPage() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const redirectTo = useRedirectTarget();
+
+  if (isAuthenticated) {
+    return <Navigate to={redirectTo} replace />;
+  }
+
+  return (
+    <AuthLayout>
+      <LoginForm />
+    </AuthLayout>
   );
 }

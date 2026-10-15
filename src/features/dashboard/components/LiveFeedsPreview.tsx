@@ -7,23 +7,32 @@ import type { Camera } from '@/types/camera.types';
 import { Link } from 'react-router-dom';
 import { useAuthedImage } from '@/hooks/useAuthedImage';
 
-function CameraSnapshot({ cameraId, className }: { cameraId: string; className?: string }) {
-  const { src, error } = useAuthedImage(`/cameras/${cameraId}/snapshot`);
+/** Camera snapshot; the LIVE badge appears only when a real image was received. */
+function CameraSnapshot({ camera }: { camera: Camera }) {
+  const { src, error } = useAuthedImage(camera.streamUrl ? `/cameras/${camera.id}/snapshot` : null);
 
-  if (error || !src) {
+  if (!camera.streamUrl || error) {
     return (
-      <div className={cn('flex items-center justify-center bg-cg-bg-video', className)}>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center">
         <WifiOff className="h-6 w-6 text-cg-text-tertiary/40" />
+        <span className="text-2xs text-cg-text-tertiary">
+          {camera.streamUrl ? 'Preview unavailable' : 'AI active · add a stream URL for a preview'}
+        </span>
       </div>
     );
   }
+  if (!src) {
+    return <div className="absolute inset-0 animate-pulse bg-cg-bg-tertiary" aria-busy="true" />;
+  }
 
   return (
-    <img
-      src={src}
-      alt={`Camera ${cameraId}`}
-      className={cn('object-cover w-full h-full', className)}
-    />
+    <>
+      <img src={src} alt={camera.name} className="absolute inset-0 object-cover w-full h-full" />
+      <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded bg-red-600/90 px-1.5 py-0.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse-slow" />
+        <span className="text-2xs font-semibold text-white uppercase">Live</span>
+      </div>
+    </>
   );
 }
 
@@ -81,17 +90,9 @@ export function LiveFeedsPreview() {
               <div className="relative aspect-video bg-cg-bg-video">
                 {isOnline ? (
                   <>
-                    <CameraSnapshot cameraId={camera.id} className="absolute inset-0" />
+                    <CameraSnapshot camera={camera} />
 
-                    {/* Live badge */}
-                    <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded bg-red-600/90 px-1.5 py-0.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse-slow" />
-                      <span className="text-2xs font-semibold text-white uppercase">
-                        Live
-                      </span>
-                    </div>
-
-                    {/* FPS badge */}
+                    {/* Frame rate reported by the AI engine */}
                     <div className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5">
                       <span className="font-mono text-2xs text-white/80">
                         {camera.fps}fps

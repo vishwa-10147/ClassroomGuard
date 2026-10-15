@@ -1,0 +1,40 @@
+# HTTPS overlay for on-premise servers - Caddy terminates TLS on ports 80/443 in front of
+# the web app; nothing else is exposed.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
+#
+# Set SITE_ADDRESS (and optionally CADDY_TLS) in .env - see deploy/caddy/Caddyfile.
+
+services:
+  frontend:
+    ports: !reset []
+
+  backend:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env (host name or IP users open)}
+      CADDY_TLS: ${CADDY_TLS:-internal}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/certs:/certs:ro
+      - ./deploy/caddy/data:/data
+      - ./deploy/caddy/config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks: [classguard-net]
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"

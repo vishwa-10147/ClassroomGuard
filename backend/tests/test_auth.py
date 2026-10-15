@@ -72,3 +72,42 @@ async def test_api_status(client: AsyncClient):
     data = resp.json()
     assert data["status"] == "online"
     assert data["database"] == "connected"
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_does_not_reveal_accounts(client: AsyncClient):
+    known = await client.post("/api/v1/auth/forgot-password", json={"email": "viewer@classguard.dev"})
+    unknown = await client.post("/api/v1/auth/forgot-password", json={"email": "nobody@classguard.dev"})
+    assert known.status_code == unknown.status_code == 200
+    assert known.json() == unknown.json()
+
+
+@pytest.mark.asyncio
+async def test_reset_password_rejects_invalid_token(client: AsyncClient):
+    resp = await client.post(
+        "/api/v1/auth/reset-password",
+        json={"token": "not-a-real-token", "new_password": "Whatever-Pass-1"},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_ai_status_reports_engines(client: AsyncClient):
+    resp = await client.get("/api/v1/status")
+    assert resp.status_code == 200
+    assert resp.json()["ai"] in ("online", "offline")
+
+
+@pytest.mark.asyncio
+async def test_report_summary_shape(client: AsyncClient):
+    data = await login(client, "admin@classguard.dev", "Admin@12345")
+    resp = await client.get(
+        "/api/v1/reports/generate",
+        headers=auth_header(data["access_token"]),
+        params={"start_date": "2020-01-01", "end_date": "2100-01-01"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    for key in ("totalEvents", "phoneDetections", "totalAlerts", "byDay", "byClassroom", "camerasOnline"):
+        assert key in body
+    assert body["totalEvents"] == sum(row["events"] for row in body["byClassroom"])

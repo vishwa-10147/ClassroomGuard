@@ -1,3 +1,4 @@
+import { AuthedImage } from '@/components/shared/AuthedImage';
 import { useEffect, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { IconButton } from '@/components/ui/Button';
@@ -87,7 +88,7 @@ export function EvidenceLightbox({
 
       {/* Image */}
       <div className="relative max-w-[90vw] max-h-[85vh]">
-        <img
+        <AuthedImage
           src={item.url}
           alt={item.filename}
           className="max-w-full max-h-[80vh] object-contain rounded-lg"

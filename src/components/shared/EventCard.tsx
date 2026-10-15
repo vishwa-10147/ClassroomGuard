@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/utils/cn';
 import { DetectionEvent } from '@/types/event.types';
-import { formatRelativeTime, formatTimestamp } from '@/utils/formatters';
+import { formatConfidence, formatRelativeTime, formatTimestamp } from '@/utils/formatters';
 
 interface EventCardProps {
   event: DetectionEvent;
@@ -54,7 +54,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, on
         </div>
         <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-500">
           <span>
-            {event.confidence !== undefined && `${Math.round(event.confidence * 100)}%`}
+            {event.confidence !== undefined && formatConfidence(event.confidence)}
             {event.confidence !== undefined && event.trackerId && ' · '}
             {event.trackerId && `Tracker #${event.trackerId}`}
           </span>
@@ -101,7 +101,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, compact = false, on
         {event.confidence && (
           <div className="flex flex-col">
             <span className="text-xs text-slate-500 dark:text-slate-400">Confidence</span>
-            <span className="font-medium text-slate-900 dark:text-slate-100">{(event.confidence * 100).toFixed(1)}%</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{formatConfidence(event.confidence)}</span>
           </div>
         )}
         {event.trackerId && (

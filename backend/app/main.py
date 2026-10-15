@@ -1,5 +1,7 @@
 import json
+import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from backend.app.core.config import settings
 from backend.app.core.database import engine, init_db
@@ -9,7 +11,8 @@ from backend.app.core.security_headers import SecurityHeadersMiddleware
 from backend.app.core.websocket import manager
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
+from sqlalchemy import or_, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @asynccontextmanager
@@ -53,7 +56,7 @@ from backend.app.api.auth import router as auth_router
 from backend.app.api.cameras import router as cameras_router
 from backend.app.api.classrooms import router as classrooms_router
 from backend.app.api.compliance import router as compliance_router
-from backend.app.api.dependencies import require_permission_or_service
+from backend.app.api.dependencies import get_db, require_permission_or_service
 from backend.app.api.events import router as events_router
 from backend.app.api.evidence import router as evidence_router
 from backend.app.api.health import router as health_router
@@ -68,6 +71,7 @@ from backend.app.api.settings import router as settings_router
 from backend.app.api.uploads import router as uploads_router
 from backend.app.api.users import router as users_router
 from backend.app.api.webhooks import router as webhooks_router
+from backend.app.models.camera import Camera
 from prometheus_client import make_asgi_app
 
 app.include_router(auth_router)
@@ -115,12 +119,52 @@ async def check_database() -> str:
         return "disconnected"
 
 
+# Last heartbeat per AI engine (in memory: the API runs as a single worker)
+_AI_HEARTBEATS: dict[str, dict] = {}
+AI_OFFLINE_AFTER_S = 90
+
+
+@app.post("/api/v1/ai/heartbeat", status_code=204)
+async def ai_heartbeat(
+    body: dict,
+    _caller=Depends(require_permission_or_service("alerts:write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Called by each AI engine every 30 s: engine liveness plus each camera's video status."""
+    engine_name = str(body.get("engine") or "ai")[:100]
+    _AI_HEARTBEATS[engine_name] = {
+        "last_seen": time.time(),
+        "cameras": int(body.get("cameras", 0)),
+        "fps": round(float(body.get("fps", 0.0)), 1),
+    }
+    now = datetime.now(UTC)
+    for cam in body.get("camera_status") or []:
+        code = str(cam.get("id", ""))[:100]
+        camera = (await db.execute(
+            select(Camera).where(or_(Camera.id == code, Camera.camera_id == code))
+        )).scalar_one_or_none()
+        if camera is None:
+            continue
+        camera.status = "online" if cam.get("online") else "offline"
+        camera.ai_processing = bool(cam.get("online"))
+        camera.fps = int(cam.get("fps") or 0)
+        camera.updated_at = now  # freshness marker for the stale-camera job
+    await db.commit()
+
+
 @app.get("/api/v1/status")
 async def api_status():
     database_status = await check_database()
+    now = time.time()
+    engines = [
+        {"engine": name, "seconds_ago": round(now - hb["last_seen"]), "cameras": hb["cameras"], "fps": hb["fps"]}
+        for name, hb in _AI_HEARTBEATS.items()
+    ]
+    ai_online = any(e["seconds_ago"] <= AI_OFFLINE_AFTER_S for e in engines)
     return {
         "status": "online",
-        "ai": "not_connected",
+        "ai": "online" if ai_online else "offline",
+        "aiEngines": engines,
         "database": database_status,
         "wsConnections": len(manager.active_connections),
     }

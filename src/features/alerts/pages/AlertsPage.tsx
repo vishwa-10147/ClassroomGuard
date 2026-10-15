@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '@/components/providers/RealTimeProvider';
 import { useState, useEffect, useCallback } from 'react';
 import { Bell, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -43,6 +44,7 @@ export default function AlertsPage() {
   useEffect(() => {
     fetchAlerts();
   }, [fetchAlerts]);
+  useLiveRefresh(['alert'], fetchAlerts);
 
   const handleAcknowledge = async (id: string) => {
     await alertService.acknowledge(id);

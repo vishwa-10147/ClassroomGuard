@@ -1,15 +1,20 @@
 from backend.app.core.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 
 class Base(DeclarativeBase):
     pass
 
 
+# Celery runs every task on a fresh event loop; pooled asyncpg connections are bound to the
+# loop that created them, so workers must not pool (DB_NULL_POOL=true in their environment).
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
+    pool_pre_ping=True,
+    **({"poolclass": NullPool} if settings.db_null_pool else {}),
 )
 
 

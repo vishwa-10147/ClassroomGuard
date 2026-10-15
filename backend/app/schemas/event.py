@@ -36,7 +36,8 @@ class DetectionEventResponse(BaseModel):
 class DetectionEventCreate(BaseModel):
     event_type: str = Field(validation_alias="eventType")
     severity: str
-    classroom_id: str = Field(validation_alias="classroomId")
+    # Optional: derived from the camera
+    classroom_id: str | None = Field(default=None, validation_alias="classroomId")
     camera_id: str = Field(validation_alias="cameraId")
     seat_id: str | None = Field(default=None, validation_alias="seatId")
     confidence: float | None = None

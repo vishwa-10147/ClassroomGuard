@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
+import { ForgotPasswordPage, ResetPasswordPage } from '@/features/auth/pages/PasswordResetPages';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { LoadingState } from '@/components/shared/LoadingState';
 import { RealTimeProvider } from '@/components/providers/RealTimeProvider';
@@ -80,6 +81,16 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+
+  {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
   },
 
   {

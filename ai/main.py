@@ -109,6 +109,7 @@ class ClassroomGuard:
     def _main_loop(self, active_cams: list[int]):
         frame_count = 0
         stats_interval = time.time()
+        last_heartbeat = 0.0
 
         while self.running:
             loop_start = time.time()
@@ -209,6 +210,14 @@ class ClassroomGuard:
                     "avg_fps": sum(fps_data.values()) / max(len(fps_data), 1),
                 })
                 stats_interval = time.time()
+
+            # Heartbeat so the web app can show whether detection is running
+            if time.time() - last_heartbeat > 30:
+                self.alert_system.send_heartbeat({
+                    c: (self.camera_manager.is_receiving(c), self.camera_manager.get_fps(c))
+                    for c in self.camera_manager.streams
+                })
+                last_heartbeat = time.time()
 
             # Handle OpenCV window keys
             if self.show_display:

@@ -66,7 +66,7 @@ export default function SeatmapVisualization({
         <h3 className="text-sm font-semibold text-cg-text-primary">Seat Map</h3>
         <div className="flex items-center gap-2 text-xs text-cg-text-secondary">
           <span className="rounded-full border border-cg-border-strong bg-cg-bg-tertiary px-2 py-0.5">
-            {occupiedCount}/{totalSeats} occupied · {occupancy}%
+            {occupiedCount > 0 ? `${occupiedCount}/${totalSeats} occupied · ${occupancy}%` : `${totalSeats} seats`}
           </span>
           {demo && (
             <span className="rounded-full border border-cg-status-info/40 bg-cg-status-info/10 px-2 py-0.5 text-cg-status-info">
@@ -75,6 +75,13 @@ export default function SeatmapVisualization({
           )}
         </div>
       </div>
+
+      {occupiedCount === 0 && (
+        <p className="text-xs text-cg-text-tertiary">
+          Layout only: student-to-seat assignment is not configured. Detections are listed per student under
+          Detection Events.
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-cg-border-default bg-cg-bg-secondary p-4">
         <div className="mx-auto min-w-[32rem] max-w-2xl">

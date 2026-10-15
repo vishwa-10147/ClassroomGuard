@@ -2,39 +2,27 @@ import { apiClient } from './client';
 import type { Camera } from '@/types/camera.types';
 import type { Classroom } from '@/types/classroom.types';
 
-interface CameraApiResponse {
-  id: string;
-  name: string;
-  camera_id: string;
-  classroom_id: string;
-  status: Camera['status'];
-  stream_url: string | null;
-  fps: number;
-  resolution: string;
-  ai_processing: boolean;
-  ai_model: string | null;
-  inference_ms: number | null;
-  last_frame_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
+// The API answers in camelCase; snake_case is accepted too for older backends.
+type CameraApiResponse = Record<string, any>;
+
+const pick = (o: Record<string, any>, camel: string, snake: string) => o[camel] ?? o[snake];
 
 const normalizeCamera = (camera: CameraApiResponse): Camera => ({
   id: camera.id,
   name: camera.name,
-  cameraId: camera.camera_id,
-  classroomId: camera.classroom_id,
+  cameraId: pick(camera, 'cameraId', 'camera_id'),
+  classroomId: pick(camera, 'classroomId', 'classroom_id'),
   status: camera.status,
-  streamUrl: camera.stream_url ?? undefined,
+  streamUrl: pick(camera, 'streamUrl', 'stream_url') ?? undefined,
   fps: camera.fps,
   resolution: camera.resolution,
-  aiActive: camera.ai_processing,
-  aiProcessing: camera.ai_processing,
-  aiModel: camera.ai_model ?? undefined,
-  inferenceMs: camera.inference_ms ?? undefined,
-  lastFrameAt: camera.last_frame_at ?? undefined,
-  createdAt: camera.created_at,
-  updatedAt: camera.updated_at,
+  aiActive: Boolean(pick(camera, 'aiProcessing', 'ai_processing')),
+  aiProcessing: Boolean(pick(camera, 'aiProcessing', 'ai_processing')),
+  aiModel: pick(camera, 'aiModel', 'ai_model') ?? undefined,
+  inferenceMs: pick(camera, 'inferenceMs', 'inference_ms') ?? undefined,
+  lastFrameAt: pick(camera, 'lastFrameAt', 'last_frame_at') ?? undefined,
+  createdAt: pick(camera, 'createdAt', 'created_at'),
+  updatedAt: pick(camera, 'updatedAt', 'updated_at'),
 });
 
 const loadClassroomMap = async (): Promise<Map<string, string>> => {
