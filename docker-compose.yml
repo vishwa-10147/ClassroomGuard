@@ -70,6 +70,7 @@ services:
       DEBUG: ${DEBUG:-false}
       USE_REDIS: "true"
       REDIS_URL: redis://redis:6379/0
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
     volumes:
       - ./storage:/app/storage
     networks:
@@ -122,12 +123,16 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+    command: ["python", "main.py", "--no-display", "--config", "config.yaml"]
     environment:
       NVIDIA_VISIBLE_DEVICES: all
+      BACKEND_URL: http://backend:8000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-}
     volumes:
       - ./ai/models:/app/models
       - ./storage:/app/storage
       - ./ai/config.yaml:/app/config.yaml
+      - ./ai/sample_videos:/app/sample_videos:ro
     networks:
       - classguard-net
     deploy:

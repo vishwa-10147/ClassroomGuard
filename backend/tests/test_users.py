@@ -51,7 +51,7 @@ async def test_create_user_as_super_admin(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_create_user_forbidden_for_admin(client: AsyncClient):
+async def test_create_super_admin_forbidden_for_admin(client: AsyncClient):
     data = await login(client, "admin.admin@classguard.dev", "Admin@12345")
     resp = await client.post(
         "/api/v1/users",
@@ -60,8 +60,20 @@ async def test_create_user_forbidden_for_admin(client: AsyncClient):
             "name": "Should Fail",
             "email": "should-fail-001@classguard.dev",
             "password": "Test@12345",
-            "role": "faculty",
+            "role": "super_admin",
         },
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_promote_self_to_super_admin(client: AsyncClient):
+    data = await login(client, "admin.admin@classguard.dev", "Admin@12345")
+    me = await client.get("/api/v1/auth/me", headers=auth_header(data["access_token"]))
+    resp = await client.patch(
+        f"/api/v1/users/{me.json()['id']}",
+        headers=auth_header(data["access_token"]),
+        json={"role": "super_admin"},
     )
     assert resp.status_code == 403
 

@@ -33,7 +33,7 @@ router = APIRouter(
 async def create_organization(
     request: Request,
     body: OrganizationCreate,
-    current_user: User = Depends(require_permission("super_admin")),
+    current_user: User = Depends(require_permission("organizations:create")),
     db: AsyncSession = Depends(get_db),
 ):
     existing = await db.execute(
@@ -65,7 +65,7 @@ async def create_organization(
 )
 async def get_organization(
     org_id: str,
-    current_user: User = Depends(require_permission("admin")),
+    current_user: User = Depends(require_permission("organizations:read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -85,7 +85,7 @@ async def update_organization(
     org_id: str,
     request: Request,
     body: OrganizationUpdate,
-    current_user: User = Depends(require_permission("admin")),
+    current_user: User = Depends(require_permission("organizations:manage")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -129,7 +129,7 @@ async def update_organization(
 )
 async def get_organization_stats(
     org_id: str,
-    current_user: User = Depends(require_permission("admin")),
+    current_user: User = Depends(require_permission("organizations:read")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -176,7 +176,7 @@ async def invite_user(
     org_id: str,
     request: Request,
     body: OrganizationInvite,
-    current_user: User = Depends(require_permission("admin")),
+    current_user: User = Depends(require_permission("organizations:manage")),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(

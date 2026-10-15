@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+from .detector import resolve_device
+
 logger = logging.getLogger(__name__)
 
 # MediaPipe / YOLOv8-pose keypoint indices (17 keypoints)
@@ -37,6 +39,7 @@ class PoseAnalyzer:
         self._load_model()
 
     def _load_model(self):
+        self.config["device"] = resolve_device(self.config["device"])
         weights = self.config["weights"]
         engine_path = str(Path(weights).with_suffix(".engine"))
         try:

@@ -96,7 +96,7 @@ async def test_assign_alert(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_assign_alert_forbidden_for_security(client: AsyncClient):
+async def test_assign_alert_to_unknown_user_is_rejected(client: AsyncClient):
     data = await login(client, "security@classguard.dev", "Security@12345")
     list_resp = await client.get("/api/v1/alerts", headers=auth_header(data["access_token"]))
     alerts = list_resp.json()
@@ -106,7 +106,7 @@ async def test_assign_alert_forbidden_for_security(client: AsyncClient):
             headers=auth_header(data["access_token"]),
             json={"assignedTo": "x"},
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 422
 
 
 @pytest.mark.asyncio

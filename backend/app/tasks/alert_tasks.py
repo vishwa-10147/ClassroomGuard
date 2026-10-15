@@ -107,15 +107,15 @@ def cleanup_old_evidence(self, days: int = 30) -> dict:
 
 @celery_app.task(bind=True, max_retries=2)
 def generate_report(self, report_type: str = "summary", params: dict | None = None) -> dict:
-    import json
     params = params or {}
     email = params.get("email")
     if email:
         # Send actual report logic would be here
-        from backend.app.services.integrations.email import send_alert_email
         import asyncio
+
+        from backend.app.services.integrations.email import send_alert_email
         asyncio.run(send_alert_email(email, {"title": "Weekly/Monthly Report", "severity": "info", "description": f"Here is your {report_type} report."}))
-    
+
     return {
         "status": "completed",
         "report_type": report_type,
@@ -131,8 +131,9 @@ def batch_process_video(self, video_path: str, camera_id: str) -> dict:
     if not os.path.isfile(video_path):
         return {"status": "error", "message": f"File not found: {video_path}"}
 
-    import httpx
     import logging
+
+    import httpx
     logger = logging.getLogger(__name__)
 
     logger.info(f"Triggering AI processing for {video_path} on camera {camera_id}")

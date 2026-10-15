@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import cv2
-from backend.app.api.dependencies import get_db, require_permission
+from backend.app.api.dependencies import get_db, require_permission, require_permission_or_service
 from backend.app.core.audit import log_audit
 from backend.app.core.limits import check_camera_limit
 from backend.app.core.tenant import current_org_id
@@ -51,8 +51,8 @@ async def list_cameras(
 )
 async def get_camera(
     camera_id: str,
-    current_user: User = Depends(
-        require_permission("cameras:read")
+    current_user: User | None = Depends(
+        require_permission_or_service("cameras:read")
     ),
     db: AsyncSession = Depends(get_db),
 ):

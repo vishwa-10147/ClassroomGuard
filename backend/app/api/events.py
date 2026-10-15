@@ -1,5 +1,5 @@
 
-from backend.app.api.dependencies import get_db, require_permission
+from backend.app.api.dependencies import get_db, require_permission, require_permission_or_service
 from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
 from backend.app.models.detection_event import DetectionEvent
@@ -8,7 +8,7 @@ from backend.app.schemas.event import (
     DetectionEventListResponse,
     DetectionEventResponse,
 )
-from fastapi import APIRouter, Depends, Request, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1/events", tags=["Events"])
 async def create_event(
     body: DetectionEventCreate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("alerts:write")),
+    _user=Depends(require_permission_or_service("alerts:write")),
 ):
     metadata_json = None
     if body.metadata is not None:

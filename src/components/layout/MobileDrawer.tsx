@@ -15,6 +15,7 @@ import {
   Settings,
   X,
   LogOut,
+  Image,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useUiStore } from '@/stores/uiStore';
@@ -38,6 +39,7 @@ const navigation = [
       { name: 'Detection Events', href: '/events', icon: Zap },
       { name: 'Alerts', href: '/alerts', icon: Bell },
       { name: 'Incidents', href: '/incidents', icon: Shield },
+      { name: 'Evidence', href: '/evidence', icon: Image },
       { name: 'Reports', href: '/reports', icon: FileText },
     ],
   },

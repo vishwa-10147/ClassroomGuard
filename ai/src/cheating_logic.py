@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 class CheatingEngine:
     def __init__(self, config: dict):
         self.rules = config.get("cheating_rules", {})
+        self.cooldown = float(config.get("alerts", {}).get("cooldown", 10.0))
         self._student_state: dict[int, dict] = {}
 
     def evaluate(
@@ -25,21 +26,24 @@ class CheatingEngine:
             self._student_state[track_id] = {
                 "phone_frames": 0,
                 "calculator_frames": 0,
-                "head_turn_frames": 0,
-                "looking_down_frames": 0,
+                "head_turn_since": None,
+                "looking_down_since": None,
                 "last_alert_times": {},
                 "seat_center": None,
             }
 
         state = self._student_state[track_id]
         alerts = []
+        now = time.time()
+        phone_dets = [d for d in object_detections if d["class_name"] in ("cell_phone", "cell phone")]
+        proximity = self.rules.get("phone_usage", {}).get("proximity_to_person", 150)
+        near_phones = [d for d in phone_dets if self._is_near_person(track.bbox, d["bbox"], proximity)]
 
         # --- Phone detection ---
         if self.rules.get("phone_usage", {}).get("enabled", True):
-            phone_dets = [d for d in object_detections if d["class_name"] in ("cell_phone", "cell phone")]
             if phone_dets:
-                phone_bbox = phone_dets[0]["bbox"]
-                if self._is_near_person(track.bbox, phone_bbox, self.rules["phone_usage"].get("proximity_to_person", 150)):
+                if near_phones:
+                    phone_bbox = max(near_phones, key=lambda d: d["confidence"])["bbox"]
                     state["phone_frames"] += 1
                     threshold = self.rules["phone_usage"].get("alert_after_frames", 5)
                     if state["phone_frames"] >= threshold:
@@ -55,7 +59,12 @@ class CheatingEngine:
 
         # --- Calculator detection ---
         if self.rules.get("calculator_usage", {}).get("enabled", True):
-            calc_dets = [d for d in object_detections if d["class_name"] == "calculator"]
+            # Only calculators near this student count against them
+            calc_dets = [
+                d for d in object_detections
+                if d["class_name"] == "calculator" and self._is_near_person(
+                    track.bbox, d["bbox"], self.rules["calculator_usage"].get("proximity_to_person", 150))
+            ]
             if calc_dets:
                 allowed = self.rules["calculator_usage"].get("allowed_sections", [])
                 if track_id not in allowed:
@@ -80,8 +89,9 @@ class CheatingEngine:
             # Head turned left/right or turned back
             direction = head.get("direction", "unknown")
             if direction in ("left", "right", "turned_back"):
-                state["head_turn_frames"] += 1
-                duration = state["head_turn_frames"] / 30.0  # assume ~30fps
+                if state["head_turn_since"] is None:
+                    state["head_turn_since"] = now
+                duration = now - state["head_turn_since"]
                 threshold = self.rules["posture"].get("head_turn_duration", 2.0)
                 if duration >= threshold:
                     severity = "HIGH" if direction == "turned_back" else "MEDIUM"
@@ -94,12 +104,13 @@ class CheatingEngine:
                     if alert:
                         alerts.append(alert)
             else:
-                state["head_turn_frames"] = max(0, state["head_turn_frames"] - 1)
+                state["head_turn_since"] = None
 
             # Looking down too long
             if direction == "down":
-                state["looking_down_frames"] += 1
-                duration = state["looking_down_frames"] / 30.0
+                if state["looking_down_since"] is None:
+                    state["looking_down_since"] = now
+                duration = now - state["looking_down_since"]
                 threshold = self.rules["posture"].get("looking_down_duration", 2.0)
                 if duration >= threshold:
                     alert = self._make_alert(
@@ -110,11 +121,11 @@ class CheatingEngine:
                     if alert:
                         alerts.append(alert)
             else:
-                state["looking_down_frames"] = max(0, state["looking_down_frames"] - 1)
+                state["looking_down_since"] = None
 
             # Hands above shoulder (possible phone in lap)
             hands = pose_analysis.get("hands", {})
-            if hands.get("hands_up", False) and phone_dets:
+            if hands.get("hands_up", False) and near_phones:
                 alert = self._make_alert(
                     track_id, "hands_up_with_phone", "HIGH",
                     "Hands raised while phone detected",
@@ -130,10 +141,9 @@ class CheatingEngine:
         message: str, camera_id: int, extra: dict,
     ) -> Optional[dict]:
         state = self._student_state[track_id]
-        cooldown = 10.0
         last = state["last_alert_times"].get(alert_type, 0)
         now = time.time()
-        if now - last < cooldown:
+        if now - last < self.cooldown:
             return None
 
         state["last_alert_times"][alert_type] = now

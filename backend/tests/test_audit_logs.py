@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient
+
 from tests.conftest import auth_header, login
+
 
 @pytest.mark.asyncio
 async def test_list_audit_logs(client: AsyncClient):

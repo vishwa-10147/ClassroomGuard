@@ -33,6 +33,10 @@ DEFAULT_SETTINGS = [
     {"key": "alert_sound_enabled", "value": "true", "category": "notifications"},
     {"key": "auto_resolve_alerts_hours", "value": "24", "category": "alerts"},
     {"key": "alert_severity_escalation", "value": "true", "category": "alerts"},
+    {"key": "alert_frequency", "value": "immediate", "category": "notifications"},
+    {"key": "session_timeout_minutes", "value": "30", "category": "security"},
+    {"key": "password_policy", "value": "moderate", "category": "security"},
+    {"key": "two_factor_enabled", "value": "false", "category": "security"},
 ]
 
 

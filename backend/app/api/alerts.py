@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from backend.app.api.dependencies import get_db, require_permission
+from backend.app.api.dependencies import get_db, require_permission, require_permission_or_service
 from backend.app.api.notifications import send_push_notification
 from backend.app.core.audit import log_audit
 from backend.app.core.websocket import manager
@@ -8,6 +8,7 @@ from backend.app.models.alert import Alert
 from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
 from backend.app.models.push_token import PushToken
+from backend.app.models.user import User
 from backend.app.schemas.alert import (
     AlertAssign,
     AlertCreate,
@@ -25,7 +26,7 @@ async def create_alert(
     request: Request,
     body: AlertCreate,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_permission("alerts:write")),
+    _user=Depends(require_permission_or_service("alerts:write")),
 ):
     alert = Alert(
         title=body.title,
@@ -234,6 +235,8 @@ async def assign_alert(
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+    if body.assigned_to and await db.get(User, body.assigned_to) is None:
+        raise HTTPException(status_code=422, detail="Assignee not found")
     old_assigned = alert.assigned_to
     alert.assigned_to = body.assigned_to
     await log_audit(

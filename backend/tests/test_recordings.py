@@ -6,7 +6,7 @@ from tests.conftest import auth_header, login
 
 @pytest.mark.asyncio
 async def test_list_recordings(client: AsyncClient):
-    data = await login(client, "viewer@classguard.dev", "Viewer@12345")
+    data = await login(client, "faculty@classguard.dev", "Faculty@12345")
     resp = await client.get("/api/v1/recordings", headers=auth_header(data["access_token"]))
     assert resp.status_code == 200
     body = resp.json()
@@ -17,7 +17,7 @@ async def test_list_recordings(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_list_recordings_with_filter(client: AsyncClient):
-    data = await login(client, "viewer@classguard.dev", "Viewer@12345")
+    data = await login(client, "faculty@classguard.dev", "Faculty@12345")
     resp = await client.get(
         "/api/v1/recordings?processing_state=completed",
         headers=auth_header(data["access_token"]),
@@ -29,7 +29,7 @@ async def test_list_recordings_with_filter(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_get_recording(client: AsyncClient):
-    data = await login(client, "viewer@classguard.dev", "Viewer@12345")
+    data = await login(client, "faculty@classguard.dev", "Faculty@12345")
     list_resp = await client.get("/api/v1/recordings?page_size=1", headers=auth_header(data["access_token"]))
     recordings = list_resp.json().get("data", [])
     if recordings:
@@ -42,7 +42,7 @@ async def test_get_recording(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_get_recording_not_found(client: AsyncClient):
-    data = await login(client, "viewer@classguard.dev", "Viewer@12345")
+    data = await login(client, "faculty@classguard.dev", "Faculty@12345")
     resp = await client.get("/api/v1/recordings/nonexistent", headers=auth_header(data["access_token"]))
     assert resp.status_code == 404
 
@@ -103,15 +103,22 @@ async def test_delete_recording(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_video_playback_with_query_token(client: AsyncClient):
     # This tests the playback endpoint which was modified to accept ?token= query parameter
-    data = await login(client, "viewer@classguard.dev", "Viewer@12345")
+    data = await login(client, "faculty@classguard.dev", "Faculty@12345")
     token = data["access_token"]
-    
+
     # Normally we'd upload a file first, but we can just test if the endpoint authenticates via token param
     resp = await client.get(f"/api/v1/uploads/video/nonexistent.mp4?token={token}")
     # It should not return 401, but 404 since the file doesn't exist
     assert resp.status_code == 404
-    
+
     # Without token, it should be 401
     resp_unauth = await client.get("/api/v1/uploads/video/nonexistent.mp4")
     assert resp_unauth.status_code == 401
 
+
+
+@pytest.mark.asyncio
+async def test_list_recordings_forbidden_for_viewer(client: AsyncClient):
+    data = await login(client, "viewer@classguard.dev", "Viewer@12345")
+    resp = await client.get("/api/v1/recordings", headers=auth_header(data["access_token"]))
+    assert resp.status_code == 403
