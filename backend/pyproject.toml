@@ -1,6 +1,6 @@
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py312"
 extend-exclude = ["alembic/versions/"]
 
 [tool.ruff.lint]
@@ -12,7 +12,7 @@ ignore = ["E501"]
 "app/main.py" = ["E402"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 ignore_missing_imports = true
 strict = false
 explicit_package_bases = true

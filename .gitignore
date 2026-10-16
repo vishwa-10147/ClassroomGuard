@@ -101,3 +101,6 @@ claude-code-best-practice-main/
 deploy/caddy/data/
 deploy/caddy/config/
 backups/
+
+# Local development overrides (see SETUP.md)
+docker-compose.override.yml

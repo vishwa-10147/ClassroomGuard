@@ -9,8 +9,8 @@ from backend.app.core.database import AsyncSessionLocal
 from backend.app.core.permissions import ROLE_PERMISSIONS
 from backend.app.core.security import decode_access_token
 from backend.app.core.tenant import current_org_id
-from backend.app.models.user import User
 from backend.app.models.role import Role
+from backend.app.models.user import User
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select

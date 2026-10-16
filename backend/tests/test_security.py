@@ -1,3 +1,4 @@
+import os
 import uuid
 
 import pytest
@@ -37,3 +38,19 @@ async def test_push_token_registration_requires_sign_in(client: AsyncClient):
         "/api/v1/notifications/register", json=body, headers=auth_header(data["access_token"])
     )
     assert resp.status_code == 201
+
+
+SERVICE_TOKEN = os.environ.get("TEST_AI_SERVICE_TOKEN", "")
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not SERVICE_TOKEN, reason="TEST_AI_SERVICE_TOKEN not set")
+async def test_ai_service_can_read_a_camera(client: AsyncClient):
+    data = await login(client, "admin@classguard.dev", "Admin@12345")
+    cameras = (await client.get("/api/v1/cameras", headers=auth_header(data["access_token"]))).json()
+    items = cameras["items"] if isinstance(cameras, dict) else cameras
+    assert items, "seed data should include cameras"
+    resp = await client.get(f"/api/v1/cameras/{items[0]['id']}", headers={"X-Service-Token": SERVICE_TOKEN})
+    assert resp.status_code == 200
+    resp = await client.get(f"/api/v1/cameras/{items[0]['id']}", headers={"X-Service-Token": "wrong"})
+    assert resp.status_code == 401

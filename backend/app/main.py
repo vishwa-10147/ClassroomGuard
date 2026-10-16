@@ -1,8 +1,8 @@
 import json
+import logging
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-import logging
 
 from backend.app.core.config import settings
 from backend.app.core.database import engine, init_db
@@ -204,7 +204,7 @@ async def websocket_endpoint(
     except Exception:
         await websocket.close(code=1008)
         return
-    await manager.connect(websocket, user.organization_id)
+    await manager.connect(websocket, str(payload["organization_id"]))
     try:
         while True:
             data = await websocket.receive_text()

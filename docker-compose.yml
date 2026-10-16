@@ -24,7 +24,7 @@ x-backend-env: &backend-env
   ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["http://localhost:3000"]}
   STORAGE_PATH: /app/storage
   USE_REDIS: "true"
-  REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
+  REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-}@redis:6379/0}
   FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
   AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env (32+ random characters)}
   RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -44,7 +44,9 @@ services:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-classroomguard}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Checked by the postgres image itself on first start; ${VAR:?} here would also be demanded
+      # by deployments that use a managed database (AWS RDS)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-classroomguard}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -60,14 +62,16 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    # The password is checked here rather than with ${VAR:?} so that deployments without this
+    # container (AWS ElastiCache) do not need it.
+    command: ["sh", "-c", "[ -n \"$${REDIS_PASSWORD}\" ] || { echo 'set REDIS_PASSWORD in .env' >&2; exit 1; }; exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
       - redisdata:/data
     networks: [classguard-net]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -196,7 +200,9 @@ services:
       - grafana_data:/var/lib/grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env when using monitoring}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+    # Refuse to start without a password (checked at start so the monitoring profile stays optional)
+    entrypoint: ["sh", "-c", "[ -n \"$${GF_SECURITY_ADMIN_PASSWORD}\" ] || { echo 'set GRAFANA_ADMIN_PASSWORD in .env' >&2; exit 1; }; exec /run.sh"]
     networks: [classguard-net]
     depends_on: [prometheus]
     restart: unless-stopped

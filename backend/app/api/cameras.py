@@ -57,12 +57,10 @@ async def get_camera(
     ),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Camera).where(
-            Camera.id == camera_id,
-            Camera.organization_id == current_user.organization_id,
-        )
-    )
+    query = select(Camera).where(Camera.id == camera_id)
+    if current_user is not None:  # None = AI service token
+        query = query.where(Camera.organization_id == current_user.organization_id)
+    result = await db.execute(query)
 
     camera = result.scalar_one_or_none()
 

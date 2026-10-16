@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
-import json
 import ipaddress
+import json
 import logging
 import socket
 import time

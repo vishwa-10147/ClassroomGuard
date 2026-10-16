@@ -56,6 +56,8 @@ ALLOWED_ORIGINS=["https://$SITE"]
 EOF
 fi
 set_env POSTGRES_PASSWORD "$(openssl rand -hex 24)"
+set_env REDIS_PASSWORD "$(openssl rand -hex 24)"
+set_env GRAFANA_ADMIN_PASSWORD "$(openssl rand -hex 16)"
 set_env JWT_SECRET "$(openssl rand -hex 32)"
 set_env AI_SERVICE_TOKEN "$(openssl rand -hex 32)"
 set_env ACCESS_TOKEN_EXPIRE_MINUTES 60
