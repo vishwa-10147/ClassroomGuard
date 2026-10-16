@@ -62,7 +62,8 @@ sudo ./scripts/install.sh
 The installer asks for the address users will open and the first administrator's email and
 password (12+ characters). It then:
 
-- writes `/opt/classroomguard/.env` with random secrets (readable by root only);
+- writes `/opt/classroomguard/.env` with random secrets for the database, Redis, sign-in
+  tokens, the AI engine and Grafana (readable by root only);
 - builds and starts every service behind HTTPS, including the AI engine when a GPU is available;
 - waits until the system is healthy and creates the administrator account.
 
@@ -93,7 +94,8 @@ Apply changes with `sudo docker compose up -d`.
 
 ### 3.2 Email
 
-Needed for **Forgot password** and alert emails. Add to `.env`, then `sudo docker compose up -d`:
+Needed for **Forgot password** emails (alerts are delivered in the app, by push notification
+and by webhook, not by email). Add to `.env`, then `sudo docker compose up -d`:
 
 ```bash
 SMTP_HOST=smtp.college.edu
@@ -174,11 +176,12 @@ Run a supervised pilot exam with invigilators checking every alert before relyin
 
 ## 5. Development setup
 
-Requirements: Python 3.12, Node.js 20, Docker. A CUDA GPU is needed only for the AI engine.
+Requirements: Python 3.12 (`.python-version`), Node.js 22 (`.nvmrc`), Docker. A CUDA GPU is
+needed only for the AI engine.
 
 ```bash
 git clone https://github.com/vishwa-10147/ClassroomGuard.git && cd ClassroomGuard
-cp .env.example .env            # set POSTGRES_PASSWORD, JWT_SECRET, AI_SERVICE_TOKEN; APP_ENV=development
+cp .env.example .env            # set POSTGRES_PASSWORD, REDIS_PASSWORD, JWT_SECRET, AI_SERVICE_TOKEN; APP_ENV=development
 
 # Database and Redis
 docker compose up -d postgres redis
@@ -187,6 +190,8 @@ docker compose up -d postgres redis
 python -m venv backend/.venv
 backend/.venv/bin/pip install -r backend/requirements-dev.txt          # Windows: backend\.venv\Scripts\pip
 export DATABASE_URL=postgresql+asyncpg://classroomguard:<POSTGRES_PASSWORD>@localhost:5432/classroomguard
+export REDIS_URL=redis://:<REDIS_PASSWORD>@localhost:6379/0
+export APP_ENV=development
 backend/.venv/bin/python -m backend.scripts.migrate
 backend/.venv/bin/python -m backend.seed_users                         # demo accounts (development only)
 backend/.venv/bin/python -m backend.seed_data                          # demo data (development only)
@@ -197,7 +202,20 @@ npm install
 npm run dev
 ```
 
-On Windows, `start.cmd` starts the API and web app and opens the browser.
+On Windows (PowerShell), set variables with `$env:DATABASE_URL = "..."` and use
+`backend\.venv\Scripts\python`. `start.cmd` starts the API and web app and opens the browser.
+If ports 3000 or 8000 are taken, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#development).
+
+PostgreSQL is published on `127.0.0.1:5432`. Redis is not published by default; for development,
+create `docker-compose.override.yml` (ignored by the production setup, which sets `COMPOSE_FILE`)
+before starting the containers:
+
+```yaml
+services:
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+```
 
 Demo accounts created by `seed_users` (never run this on a production server):
 
@@ -215,14 +233,14 @@ AI engine and model training: [ai/README.md](ai/README.md). Mobile app: copy
 ### Running the tests
 
 ```bash
-# Backend (API running with RATE_LIMIT_ENABLED=false)
-TEST_BASE_URL=http://localhost:8000 python -m pytest backend/tests
+# Backend (API running with RATE_LIMIT_ENABLED=false and the demo seed data)
+cd backend && TEST_BASE_URL=http://localhost:8000 python -m pytest tests/ && cd ..
 
 # AI rules
-python -m pytest ai/tests
+cd ai && python -m pytest tests/ && cd ..
 
-# Web unit tests and type checks
-npx jest src && npx tsc --noEmit
+# Web lint, unit tests and type checks
+npm run lint && npx jest src && npx tsc --noEmit
 
 # End to end against a running stack (add E2E_AI_TOKEN and E2E_CAMERA_ID for the live-alert test)
 PLAYWRIGHT_BASE_URL=https://classroomguard.college.edu E2E_IGNORE_HTTPS_ERRORS=1 \
@@ -238,4 +256,6 @@ E2E_EMAIL=<admin email> E2E_PASSWORD=<password> npx playwright test
 | Operations, security checklist, troubleshooting | [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md) |
 | AWS deployment | [docs/DEPLOY_AWS.md](docs/DEPLOY_AWS.md) |
 | AI engine, accuracy, retraining | [ai/README.md](ai/README.md) |
-| All configuration variables | [.env.example](.env.example) |
+| All configuration variables | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) |
+| Architecture and API | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API.md](docs/API.md) |
+| Problems | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |

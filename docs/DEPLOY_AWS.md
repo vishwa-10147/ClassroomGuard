@@ -80,7 +80,7 @@ engines on the instance (`python export_tensorrt.py`) adds roughly 2x more throu
    AWS_REGION=ap-south-1
    IMAGE_PREFIX=<account-id>.dkr.ecr.ap-south-1.amazonaws.com/classroomguard
    DATABASE_URL=postgresql+asyncpg://<user>:<password>@<rds-endpoint>:5432/classroomguard
-   REDIS_URL=redis://<elasticache-endpoint>:6379/0
+   REDIS_URL=rediss://:<auth-token>@<elasticache-endpoint>:6380/0   # TLS + AUTH recommended
    JWT_SECRET=<openssl rand -hex 32>
    AI_SERVICE_TOKEN=<openssl rand -hex 32>
    FRONTEND_URL=https://classroomguard.example.edu
@@ -88,15 +88,19 @@ engines on the instance (`python export_tensorrt.py`) adds roughly 2x more throu
    APP_ENV=production
    ```
 
-   Prefer storing `JWT_SECRET`, `AI_SERVICE_TOKEN` and the database password in **AWS Secrets
-   Manager** and rendering `.env` from it at boot.
+   `JWT_SECRET` and `AI_SERVICE_TOKEN` must be at least 32 characters, and `ALLOWED_ORIGINS`
+   must not contain localhost; the API refuses to start in production otherwise.
+   `POSTGRES_PASSWORD` and `REDIS_PASSWORD` are not needed because RDS and ElastiCache replace
+   the bundled containers. Prefer storing the secrets in **AWS Secrets Manager** and rendering
+   `.env` from it at boot.
 
 ### 3. Load balancer and TLS
 
 1. Request a certificate in **ACM** for your domain.
 2. Create an **Application Load Balancer** (HTTPS :443 with the certificate, HTTP :80 redirecting
    to HTTPS) with a target group pointing at the instance on port 80.
-3. Target group health check: path `/healthz`, success code `200`.
+3. Target group health check: path `/healthz`, success code `200` (it returns `503` while the
+   database or Redis is unreachable).
 4. Set the ALB idle timeout to 3600 s so live-alert WebSockets are not cut off.
 5. Point your DNS record (Route 53 or your registrar) at the ALB.
 

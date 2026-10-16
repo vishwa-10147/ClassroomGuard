@@ -3,12 +3,15 @@
 **AI-assisted exam-hall monitoring.** ClassroomGuard watches classroom CCTV cameras, detects
 students using a **mobile phone** or an unpermitted **calculator**, and alerts invigilators in
 real time with an annotated evidence frame. Staff review and act on alerts from a web dashboard
-or the mobile app.
+or a mobile app.
 
 [![CI](https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml)
 
-> **Installing it?** Start with **[SETUP.md](SETUP.md)**.
-> IT departments: the full operations guide is [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md).
+> **Installing it on a college server?** Follow **[SETUP.md](SETUP.md)**.
+> The operations guide for IT departments is [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md).
+
+ClassroomGuard supports invigilators. It does not replace them. Every alert is a prompt for a
+person to check, never proof on its own (see [Detection accuracy](#detection-accuracy)).
 
 ---
 
@@ -17,24 +20,38 @@ or the mobile app.
 - [How it works](#how-it-works)
 - [Features](#features)
 - [Architecture](#architecture)
-- [Detection accuracy](#detection-accuracy)
-- [Quick start](#quick-start)
-- [Testing and quality](#testing-and-quality)
-- [Deployment](#deployment)
-- [Security and privacy](#security-and-privacy)
-- [Known limitations](#known-limitations)
+- [Technology stack](#technology-stack)
 - [Project structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Database and migrations](#database-and-migrations)
+- [Running locally](#running-locally)
+- [Running in production](#running-in-production)
+- [API](#api)
+- [Testing](#testing)
+- [Linting and type checking](#linting-and-type-checking)
+- [CI/CD](#cicd)
+- [Deployment](#deployment)
+- [Detection accuracy](#detection-accuracy)
+- [Troubleshooting](#troubleshooting)
+- [Security](#security)
+- [Known limitations](#known-limitations)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+- [Author](#author)
 
 ## How it works
 
 1. **Detect.** A detector trained for exam halls finds phones and calculators in each camera
-   frame (1280 px, CUDA FP16). A pose model finds every student and their wrists.
-2. **Associate.** Each object is assigned to the nearest student. An object within reach of a
-   wrist is *in hand*; otherwise it is *at the desk*.
-3. **Confirm.** The object must stay with that student for a set time (1 s for a phone, 1.5 s
-   for a calculator), which filters out single-frame false alarms. Repeat alerts for the same
-   student or desk are suppressed for 2 minutes.
-4. **Alert.** The AI engine sends the detection to the API. It appears instantly on every open
+   frame (1280 px, CUDA FP16). A pose model finds every person and their wrists.
+2. **Associate.** Each object is assigned to the nearest tracked person. An object within reach
+   of a wrist is *in hand*; otherwise it is *at the desk*.
+3. **Confirm.** The object must stay with that person for a set time (1 s for a phone, 1.5 s for
+   a calculator), which filters out single-frame false alarms. Repeat alerts for the same
+   person or desk are suppressed for 2 minutes.
+4. **Alert.** The AI engine sends the detection to the API. It appears at once on every open
    dashboard: **HIGH** for in-hand use, **MEDIUM** for possession, with the evidence frame.
    Invigilators acknowledge, resolve or escalate it to an incident.
 
@@ -42,45 +59,268 @@ or the mobile app.
 
 | Area | Capabilities |
 |---|---|
-| **Detection** | Phone and calculator detection; per-student association; in-hand vs. at-desk severity; calculator rule switchable per exam |
-| **Real-time monitoring** | Alerts, events, evidence and dashboard figures update live over WebSocket without reloading; in-app notifications; AI engine and camera status reported every 30 s |
-| **Investigation** | Detection events with evidence frames; alerts (acknowledge / assign / resolve); incidents; recording upload with offline analysis |
-| **Reporting** | Period and classroom summaries with daily breakdown; CSV and PDF export |
+| **Detection** | Phone and calculator detection; per-person association; in-hand vs. at-desk severity; calculator rule switchable per exam |
+| **Real-time monitoring** | Alerts, detection events and dashboard figures update over WebSocket without reloading; AI engine and camera status reported every 30 s; cameras marked offline when they stop reporting |
+| **Investigation** | Detection events with evidence frames; alerts (acknowledge, assign, resolve); incidents; live camera view when a stream URL is configured |
+| **Reporting** | Period and classroom summaries with a daily breakdown; CSV and PDF export |
 | **Administration** | Users and five built-in roles; permission matrix; audit log; system settings; webhooks (Slack, Microsoft Teams, custom) |
-| **Accounts** | Email password reset; automatic session renewal; rate-limited sign-in |
-| **Compliance** | Evidence retention enforced nightly from System Settings; consent records; personal data export and erasure |
-| **Operations** | One-command installer, HTTPS, backups and restore, updates, health checks, optional Prometheus and Grafana |
+| **Accounts** | Email password reset; automatic session renewal; rate-limited sign-in; accounts created by administrators |
+| **Compliance** | Evidence retention enforced nightly; consent records; personal-data export and erasure endpoints |
+| **Operations** | One-command installer, HTTPS, backup and restore, update script, health checks, optional Prometheus and Grafana |
 | **Mobile** | Expo (React Native) app with alerts, cameras and push notifications |
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    cams["Exam-hall IP cameras"] -->|RTSP| ai["AI engine<br/>YOLO detector + pose<br/>PyTorch / CUDA"]
+    ai -->|"detections, heartbeat<br/>X-Service-Token"| api["API<br/>FastAPI"]
+    ai -->|evidence frames| storage[("Shared storage")]
+    api <--> pg[("PostgreSQL")]
+    api <--> redis[("Redis")]
+    redis <--> celery["Celery worker + beat<br/>retention, camera health"]
+    celery <--> pg
+    api --- storage
+    browser["Staff browsers"] -->|HTTPS 443| caddy["Caddy<br/>TLS"]
+    caddy --> web["Web app<br/>nginx"]
+    web -->|"/api, /ws"| api
+    mobile["Mobile app"] -->|"HTTPS, WSS"| caddy
 ```
- Exam-hall cameras (RTSP)
-          │
-          ▼
- ┌─────────────────┐  detections, heartbeat   ┌────────────────────────┐    ┌────────────┐
- │  AI engine      │ ───────────────────────▶ │  API (FastAPI)         │◀──▶│ PostgreSQL │
- │  YOLO detector  │  X-Service-Token         │  REST + WebSocket      │    └────────────┘
- │  + pose, CUDA   │                          │  Celery worker + beat  │◀──▶ Redis
- └─────────────────┘                          └───────────┬────────────┘
-                                                          │ /api, /ws (live)
-                                       HTTPS ┌────────────┴────────────┐
-                              browsers ─────▶│ Caddy ─▶ web app (nginx)│   Mobile app
-                                             └─────────────────────────┘
-```
+
+The API is the only component that talks to the database. The AI engine is stateless apart from
+its model files and can run on the same server or on separate GPU machines. Details, sequence
+diagrams and the data model: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Technology stack
 
 | Component | Technology |
 |---|---|
-| Web app | React 18, TypeScript, Vite, Tailwind CSS, Zustand, Recharts; served by nginx |
-| API | Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Pydantic 2, JWT |
-| Background jobs | Celery worker and beat on Redis (alerts fan-out, webhooks, exports, retention, camera health) |
-| AI engine | PyTorch (CUDA 12.6), Ultralytics YOLO26 detector + YOLOv8 pose, ByteTrack, OpenCV |
-| Delivery | Docker Compose; Caddy for HTTPS on-premise; GitHub Actions CI and AWS deployment |
+| Web app | React 18, TypeScript 5, Vite, Tailwind CSS, Zustand, Recharts, jsPDF; served by nginx |
+| API | Python 3.12, FastAPI, SQLAlchemy 2 (async, asyncpg), Alembic, Pydantic 2, python-jose (JWT), slowapi |
+| Background jobs | Celery worker and beat on Redis |
+| Data | PostgreSQL 16, Redis 7 |
+| AI engine | PyTorch (CUDA 12.6), Ultralytics YOLO26 detector, YOLOv8m-pose, ByteTrack, OpenCV |
+| Mobile | Expo / React Native, Expo Router |
+| Edge | Caddy 2.8 (on-premise HTTPS) |
+| Delivery | Docker Compose; GitHub Actions (CI and AWS deploy) |
+| Monitoring (optional) | Prometheus, Grafana |
+
+## Project structure
+
+```
+ClassroomGuard/
+├── src/                        Web app (React + TypeScript)
+├── backend/                    FastAPI app, Celery tasks, Alembic migrations, API tests
+│   ├── app/api/                REST routers
+│   ├── app/core/               settings, security, permissions, database, WebSocket
+│   ├── app/models/             SQLAlchemy models
+│   ├── app/services/           alerting, email, integrations
+│   ├── app/tasks/              Celery tasks and schedules
+│   ├── alembic/                database migrations
+│   └── tests/                  HTTP tests against a running API
+├── ai/                         AI engine, training and evaluation scripts, rules tests
+├── mobile/                     Expo mobile app
+├── e2e/                        Playwright end-to-end tests
+├── deploy/                     Caddy configuration and certificate folder
+├── scripts/                    install, backup, restore, update; Windows dev launchers
+├── monitoring/                 Prometheus and Grafana configuration
+├── docs/                       Architecture, API, configuration, deployment, troubleshooting
+├── docker-compose.yml          Full stack (profiles: ai, monitoring)
+├── docker-compose.https.yml    On-premise HTTPS overlay (Caddy)
+├── docker-compose.ai-host.yml  AI engine on a separate GPU machine
+└── docker-compose.aws.yml      AWS overlay (RDS, ElastiCache, ECR images)
+```
+
+## Prerequisites
+
+| Use | Requirements |
+|---|---|
+| Production (on-premise) | Ubuntu Server 22.04/24.04, Docker Engine with the Compose plugin; for the AI engine an NVIDIA GPU (8 GB+ VRAM), driver 535+ and the NVIDIA Container Toolkit |
+| Development | Python 3.12 (`.python-version`), Node.js 22 (`.nvmrc`), Docker (for PostgreSQL and Redis), Git |
+| AI engine development | Python 3.12 and an NVIDIA GPU with CUDA 12.x drivers (it falls back to CPU, which is too slow for live cameras) |
+| Model files | `exam_detector.pt` and `yolov8m-pose.pt` in `ai/models/`. They are not stored in git and are supplied separately |
+
+## Installation
+
+### Production server (Linux)
+
+```bash
+sudo git clone https://github.com/vishwa-10147/ClassroomGuard.git /opt/classroomguard
+cd /opt/classroomguard
+sudo cp /path/to/exam_detector.pt /path/to/yolov8m-pose.pt ai/models/   # GPU server only
+sudo ./scripts/install.sh
+```
+
+The installer generates secrets into `.env`, starts every service behind HTTPS and creates the
+first super admin. The full walk-through, including certificates, email, cameras and the
+pre-exam checklist, is in [SETUP.md](SETUP.md).
+
+### Development machine
+
+Linux and macOS:
+
+```bash
+git clone https://github.com/vishwa-10147/ClassroomGuard.git && cd ClassroomGuard
+cp .env.example .env                       # then edit; see Configuration
+python3.12 -m venv backend/.venv
+backend/.venv/bin/pip install -r backend/requirements-dev.txt
+npm install
+```
+
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/vishwa-10147/ClassroomGuard.git; cd ClassroomGuard
+Copy-Item .env.example .env                # then edit; see Configuration
+py -3.12 -m venv backend\.venv
+backend\.venv\Scripts\pip install -r backend\requirements-dev.txt
+npm install
+```
+
+macOS has no NVIDIA GPU support. Develop the web app and API there, and run the AI engine on a
+Linux or Windows machine with an NVIDIA GPU. AI engine setup: [ai/README.md](ai/README.md#running).
+
+## Configuration
+
+All server settings come from environment variables, normally the `.env` file in the repository
+root. [`.env.example`](.env.example) lists them with comments. The required values are:
+
+| Variable | Purpose |
+|---|---|
+| `POSTGRES_PASSWORD` | Database password |
+| `REDIS_PASSWORD` | Redis password (the bundled Redis refuses to start without it) |
+| `JWT_SECRET` | Signs access tokens; 32+ random characters (the API refuses to start in production otherwise) |
+| `AI_SERVICE_TOKEN` | Shared secret the AI engine uses to send detections |
+
+Generate secrets with `openssl rand -hex 32`. Never commit `.env`. The installer creates it with
+`chmod 600`, and `scripts/update.sh` adds secrets that newer releases require. With
+`APP_ENV=production` or `staging`, the API also requires an `AI_SERVICE_TOKEN` of 32+ characters
+and explicit, non-local `ALLOWED_ORIGINS`.
+
+Every variable, the AI engine's `ai/config.yaml` and the mobile app's settings are described in
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
+## Database and migrations
+
+- PostgreSQL schema changes are managed by **Alembic** (`backend/alembic/versions/`).
+- The backend container applies pending migrations on every start
+  (`python -m backend.scripts.migrate`), so updates need no manual step.
+- In development, run them yourself from the repository root:
+
+  ```bash
+  backend/.venv/bin/python -m backend.scripts.migrate
+  ```
+
+- New migration after changing a model:
+
+  ```bash
+  backend/.venv/bin/alembic -c backend/alembic.ini revision --autogenerate -m "describe the change"
+  ```
+
+- Demo accounts and sample data, **for development only**: `python -m backend.seed_users` and
+  `python -m backend.seed_data`. Never run them on a production server.
+
+## Running locally
+
+```bash
+docker compose up -d postgres redis                        # database and Redis (see SETUP.md for the Redis port)
+
+export DATABASE_URL=postgresql+asyncpg://classroomguard:<POSTGRES_PASSWORD>@localhost:5432/classroomguard
+export REDIS_URL=redis://:<REDIS_PASSWORD>@localhost:6379/0
+export APP_ENV=development
+backend/.venv/bin/python -m backend.scripts.migrate
+backend/.venv/bin/python -m backend.seed_users              # demo accounts
+backend/.venv/bin/uvicorn backend.app.main:app --reload --port 8000
+
+npm run dev                                                 # web app on http://localhost:3000
+```
+
+On Windows, set variables with `$env:NAME = "value"` and use `backend\.venv\Scripts\...`;
+`start.cmd` starts the API and web app together. The Vite dev server proxies `/api` and `/ws`
+to port 8000. Interactive API documentation is at <http://localhost:8000/docs> when
+`APP_ENV` is not `production`.
+
+Step-by-step development setup, demo accounts and the AI engine: [SETUP.md → Development
+setup](SETUP.md#5-development-setup).
+
+## Running in production
+
+The supported production setup is Docker Compose:
+
+| Service | Role |
+|---|---|
+| `caddy` | HTTPS on ports 443/80 (on-premise overlay) |
+| `frontend` | nginx serving the web app and proxying `/api` and `/ws` |
+| `backend` | FastAPI; runs migrations on start |
+| `celery-worker`, `celery-beat` | Background and scheduled jobs |
+| `postgres`, `redis` | Data stores (or RDS and ElastiCache on AWS) |
+| `ai` | GPU AI engine (profile `ai`) |
+| `prometheus`, `grafana` | Optional (profile `monitoring`, bound to localhost) |
+
+```bash
+sudo docker compose up -d          # uses COMPOSE_FILE and COMPOSE_PROFILES from .env
+sudo docker compose ps             # every service Up / healthy
+```
+
+Backups, updates, scaling to more cameras and the security checklist:
+[docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md).
+
+## API
+
+- REST under `/api/v1`, JSON, bearer access tokens (`Authorization: Bearer <token>`).
+- WebSocket at `/ws?token=<access token>` for live `alert` and `detection` messages.
+- The AI engine authenticates with the `X-Service-Token` header.
+- Every route is protected by a named permission, enforced from one catalogue in
+  `backend/app/core/permissions.py`.
+
+The endpoint reference (107 routes with their required permissions), the authentication flow
+and the WebSocket protocol are in [docs/API.md](docs/API.md). The OpenAPI schema is served at
+`/openapi.json` and `/docs` in development.
+
+## Testing
+
+| Suite | Location | Command | Needs |
+|---|---|---|---|
+| Backend API | `backend/tests` | `cd backend && TEST_BASE_URL=http://localhost:8000 python -m pytest tests/` | Running API with demo seed data and `RATE_LIMIT_ENABLED=false`; set `TEST_AI_SERVICE_TOKEN` to include the service-token test |
+| AI rules | `ai/tests` | `python -m pytest ai/tests` | `numpy`, `pytest` |
+| Web unit | `src/**/*.test.ts` | `npx jest src` | `npm install` |
+| End-to-end | `e2e/` | `npx playwright test` | Running stack; see [SETUP.md](SETUP.md#running-the-tests) for variables |
+
+Results at the v1.0.0 release, run locally: backend 122 passed; AI rules 11 passed;
+web unit 4 passed; end-to-end 7 passed (including the live AI-detection test). CI runs all four
+suites on every pull request to `main`.
+
+## Linting and type checking
+
+| Check | Command |
+|---|---|
+| Python lint | `ruff check backend/` |
+| Python types | `mypy --config-file backend/pyproject.toml backend/app/ --ignore-missing-imports` (from the repository root) |
+| Web lint | `npm run lint` (ESLint flat config in `eslint.config.js`, zero warnings allowed) |
+| TypeScript types | `npx tsc --noEmit` (web), `cd mobile && npx tsc --noEmit` (mobile) |
+| Pre-commit hooks | `pre-commit install` (configuration in `.pre-commit-config.yaml`) |
+
+## CI/CD
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | Push and pull request to `main` | Python 3.12 and Node 22: ruff, mypy, `tsc`, production build; PostgreSQL service, migrations, seed, API tests, AI rules tests, Jest, Playwright; Docker builds of the backend, frontend and AI images |
+| [`deploy.yml`](.github/workflows/deploy.yml) | Push to `main`, manual | Builds and pushes images to Amazon ECR and rolls them out on EC2 through SSM. Skipped until the `AWS_ROLE_ARN` repository variable is set |
+
+## Deployment
+
+| Target | Guide |
+|---|---|
+| **College server (on-premise)** | [SETUP.md](SETUP.md), then [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md) |
+| **AWS** | [docs/DEPLOY_AWS.md](docs/DEPLOY_AWS.md): EC2 GPU, RDS, ElastiCache, ECR, ALB with TLS |
+| **Additional AI machine** | `docker compose -f docker-compose.ai-host.yml up -d` ([details](docs/DEPLOY_ONPREM.md#9-operations)) |
+
+Operations scripts: `scripts/backup.sh`, `scripts/restore.sh`, `scripts/update.sh`.
 
 ## Detection accuracy
 
-Measured on held-out data the model never saw during training (thresholds fixed on validation
-data beforehand). Full method and figures: [ai/README.md](ai/README.md).
+Measured on held-out data the model never saw during training, with thresholds fixed on
+validation data beforehand. Method and full figures: [ai/README.md](ai/README.md#accuracy).
 
 | Test set | Class | Precision | Recall | F1 |
 |---|---|---|---|---|
@@ -88,118 +328,109 @@ data beforehand). Full method and figures: [ai/README.md](ai/README.md).
 | All test images (387) | Calculator | 0.83 | 0.89 | 0.86 |
 | Unseen CCTV classroom | Mobile phone | 0.93 | 0.43 | 0.59 |
 
-These are per-frame figures. Because a phone has to persist for a second or more, a phone in use
-is usually caught over several frames even when a single frame misses it. Precision is high, so
-false accusations are rare, but **some phones will be missed**, particularly small ones at the
-back of large halls.
+These are per-frame figures. A phone in use usually stays visible for several frames, so it is
+often caught even when one frame misses it. Precision is high, so false alarms are uncommon, but
+**some phones will be missed**, particularly small ones at the back of large halls.
 
-## Quick start
+## Troubleshooting
 
-On a Linux server with Docker (and, for the AI engine, an NVIDIA GPU):
-
-```bash
-git clone https://github.com/vishwa-10147/ClassroomGuard.git /opt/classroomguard
-cd /opt/classroomguard
-sudo cp /path/to/exam_detector.pt /path/to/yolov8m-pose.pt ai/models/   # model files, supplied separately
-sudo ./scripts/install.sh
-```
-
-The installer generates secrets, starts every service behind HTTPS and creates the first
-administrator. Then add classrooms and cameras as described in [SETUP.md](SETUP.md).
-
-For local development, see [SETUP.md → Development setup](SETUP.md#5-development-setup).
-
-## Testing and quality
-
-| Suite | Scope | Result at release |
-|---|---|---|
-| Backend API (`backend/tests`) | 109 HTTP tests: authentication, RBAC, every resource, reports, password reset | All passing |
-| AI rules (`ai/tests`) | Rules engine, object assignment, timing, de-duplication, false-positive filter | 11 passing |
-| End-to-end (`e2e/`) | Sign-in, every page free of API errors and crashes, password reset, live WebSocket, **AI detection appearing live** | 7 passing |
-| Web unit (`src/**/*.test.ts`) | Utilities | 4 passing |
-| Static analysis | `ruff`, `mypy`, `tsc` (web and mobile) | Clean |
-
-The full stack has also been verified from a clean clone with `scripts/install.sh`, with the
-GPU AI engine processing real exam-hall recordings: detections, live alerts, evidence frames,
-camera status, backup and restore, and email password reset. CI runs the automated suites on
-every push.
-
-## Deployment
-
-| Target | Guide |
+| Symptom | First check |
 |---|---|
-| **College server (on-premise)** | [SETUP.md](SETUP.md) and [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md) |
-| **AWS** | [docs/DEPLOY_AWS.md](docs/DEPLOY_AWS.md): EC2 GPU, RDS, ElastiCache, ECR, ALB with TLS, CloudWatch |
-| **Additional AI machine** | `docker compose -f docker-compose.ai-host.yml up -d` ([details](docs/DEPLOY_ONPREM.md#9-operations)) |
+| Browser certificate warning | Install the college certificate or trust the internal CA ([SETUP.md §3.1](SETUP.md#31-https-certificate)) |
+| Header shows **AI Offline** | `sudo docker compose logs ai`, `nvidia-smi`, model files in `ai/models/` |
+| Camera stays offline | `backend_camera_id` in `ai/config.yaml` must equal the Camera ID in the web app |
+| No password-reset email | `SMTP_*` values in `.env`; `sudo docker compose logs backend` |
 
-Operations: `scripts/backup.sh`, `scripts/restore.sh`, `scripts/update.sh`.
+More symptoms and fixes: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-## Security and privacy
+## Security
 
-- HTTPS only on-premise (Caddy); only ports 80 and 443 are exposed.
-- Short-lived JWT access tokens with rotating, revocable refresh tokens stored hashed; sign-in and
-  password reset are rate limited; reset links are single-use and stored hashed.
-- Role-based access control on protected endpoints from one permission catalogue
-  (`backend/app/core/permissions.py`); only super admins can create or promote super admins.
-- The AI engine authenticates with a dedicated service token; live updates require a signed-in user.
-- The API refuses to start in production with a weak `JWT_SECRET`; containers run as non-root.
+- HTTPS only on-premise (Caddy); only ports 80 and 443 are exposed; the API and the metrics
+  endpoint are not published directly.
+- Short-lived JWT access tokens with rotating, revocable refresh tokens stored hashed. Sign-in
+  and password reset are rate limited, and reset links are single-use.
+- Role-based access control on every endpoint. Only super admins can create or promote super
+  admins. Public sign-up is disabled by default.
+- The AI engine uses a dedicated service token. Live updates require a signed-in, active user
+  and are delivered only to users of the same organisation.
+- Uploaded file names are checked against path traversal; webhook URLs to private networks are
+  refused.
+- The API refuses to start in production with a weak `JWT_SECRET`. Containers run as non-root.
 - Evidence frames are deleted automatically after the retention period set in System Settings.
 
 ### Production hardening checklist
 
 Before exposing an installation to real users:
 
-1. Copy `.env.example` to `.env`, generate unique secrets, and keep the file outside source control.
-   Production requires `JWT_SECRET`, `AI_SERVICE_TOKEN`, `POSTGRES_PASSWORD`, and `REDIS_PASSWORD`.
-2. Set explicit HTTPS `FRONTEND_URL` and `ALLOWED_ORIGINS`; never use localhost origins in staging or
-   production.
-3. Use the readiness endpoint (`/health/ready`) for load-balancer and container health checks. It
-   returns `503` when PostgreSQL or Redis is unavailable.
-4. Put Prometheus and Grafana on an administration-only network, set a unique Grafana password, and
-   do not expose their ports publicly.
-5. Use organization-scoped accounts and verify cross-organization access with the backend test suite
-   before importing existing data. Existing legacy rows with a null `organization_id` require a
-   migration/ownership decision before production use.
+1. Copy `.env.example` to `.env`, generate unique secrets, and keep the file outside source
+   control. Production requires `JWT_SECRET`, `AI_SERVICE_TOKEN`, `POSTGRES_PASSWORD` and
+   `REDIS_PASSWORD`.
+2. Set explicit HTTPS `FRONTEND_URL` and `ALLOWED_ORIGINS`. Never use localhost origins in
+   staging or production.
+3. Use the readiness endpoint (`/health/ready`) for load-balancer and container health checks.
+   It returns `503` when PostgreSQL or Redis is unavailable.
+4. Put Prometheus and Grafana on an administration-only network, set a unique Grafana password,
+   and do not expose their ports publicly.
+5. Use organisation-scoped accounts and verify cross-organisation access with the backend test
+   suite before importing existing data. Legacy rows with a null `organization_id` need a
+   migration or ownership decision before production use.
 6. Rotate any credentials that may have existed in local `.env` or backup files, and remove real
    student evidence from source trees and deployment archives.
 
-ClassroomGuard processes video of students. Colleges should inform students and staff, set a
-retention period that matches their examination rules, and treat every alert as a prompt for an
-invigilator to check, never as proof on its own (see
-[docs/DEPLOY_ONPREM.md → Privacy and policy](docs/DEPLOY_ONPREM.md#11-privacy-and-policy)).
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md). ClassroomGuard
+processes video of students. Colleges should inform students and staff and set a retention
+period that matches their examination rules
+([privacy guidance](docs/DEPLOY_ONPREM.md#11-privacy-and-policy)).
 
 ## Known limitations
 
-- **Accuracy:** some phones are missed (see [Detection accuracy](#detection-accuracy)). Calculator
-  detection has been validated on photographs, not yet on CCTV footage.
-- **Who is who:** detections are tied to a tracked person and a camera, not to a named student or
-  seat. Invigilators are tracked like students.
-- **Head-turn and looking-down cues** are implemented but disabled by default: on overhead cameras
-  they fire on normal exam behaviour and need per-camera calibration.
-- **Live video in the browser** requires the camera's RTSP URL to be entered on the Cameras page;
-  the AI engine works without it.
-- The best accuracy gain will come from retraining with labelled footage from the college's own
-  halls ([ai/README.md → Improving the model](ai/README.md#improving-the-model)).
+- **Accuracy:** some phones are missed (see [Detection accuracy](#detection-accuracy)).
+  Calculator detection has been validated on photographs, not yet on CCTV footage.
+- **Who is who:** detections are tied to a tracked person and a camera, not to a named student
+  or seat. Invigilators are tracked like students.
+- **Recordings:** uploaded recordings are stored and playable, but automatic offline analysis is
+  not connected yet. The AI engine analyses live camera streams only.
+- **Head-turn and looking-down cues** are implemented but disabled by default. On overhead
+  cameras they fire on normal exam behaviour and need per-camera calibration.
+- **Mobile app:** the Dashboard tab calls an endpoint that does not exist yet
+  (`/dashboard/stats`); the Alerts and Cameras tabs work. Push notifications need an Expo (EAS)
+  project ID.
+- **Observability:** Sentry and OpenTelemetry helpers exist in `backend/app/core` but are not
+  initialised. `/metrics` (Prometheus, internal network only) records request metrics.
+- **Webhooks** can only target public addresses: URLs that resolve to private, loopback or
+  link-local networks are rejected to prevent server-side request forgery. A webhook receiver on
+  the campus LAN is therefore not supported.
+- The largest accuracy gain will come from retraining with labelled footage from the college's
+  own halls ([ai/README.md → Improving the model](ai/README.md#improving-the-model)).
 
-## Project structure
+## Documentation
 
-```
-ClassroomGuard/
-├── src/                        Web app (React + TypeScript)
-├── backend/                    API, background jobs, migrations, tests
-├── ai/                         AI engine, training, evaluation, rules tests
-├── mobile/                     Expo mobile app
-├── e2e/                        Playwright end-to-end tests
-├── deploy/caddy/               HTTPS reverse-proxy configuration
-├── scripts/                    install, backup, restore, update
-├── docs/                       On-premise and AWS deployment guides
-├── monitoring/                 Prometheus and Grafana configuration
-├── docker-compose.yml          Full stack (profiles: ai, monitoring)
-├── docker-compose.https.yml    On-premise HTTPS overlay
-├── docker-compose.ai-host.yml  AI engine on a separate GPU machine
-└── docker-compose.aws.yml      AWS overlay
-```
+| Document | Contents |
+|---|---|
+| [SETUP.md](SETUP.md) | Installation, first-time configuration, verification, development setup |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, data flow, detection pipeline, data model |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every environment variable and the AI engine configuration |
+| [docs/API.md](docs/API.md) | Authentication, WebSocket protocol, endpoint reference |
+| [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md) | On-premise operations, backups, security checklist, privacy |
+| [docs/DEPLOY_AWS.md](docs/DEPLOY_AWS.md) | AWS deployment |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Symptoms and fixes |
+| [ai/README.md](ai/README.md) | AI engine, accuracy, retraining |
+| [ai/training/README.md](ai/training/README.md) | Training data, settings and evaluation protocol |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and conventions |
+| [SECURITY.md](SECURITY.md) | Reporting vulnerabilities and deployment hardening |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+
+## Contributing
+
+Contributions are welcome through pull requests to `main`. Read [CONTRIBUTING.md](CONTRIBUTING.md)
+for the branch, test and commit conventions.
 
 ## License
 
-Private project. All rights reserved.
+No open-source license has been chosen yet. Until a `LICENSE` file is added, all rights are
+reserved by the author, and the code may not be copied, modified or redistributed without
+permission.
+
+## Author
+
+Developed by **[vishwa-10147](https://github.com/vishwa-10147)**.
