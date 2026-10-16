@@ -7,7 +7,6 @@ import numpy as np
 from backend.app.api.dependencies import get_db, require_permission, require_permission_or_service
 from backend.app.core.audit import log_audit
 from backend.app.core.limits import check_camera_limit
-from backend.app.core.tenant import current_org_id
 from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
 from backend.app.models.organization import Organization
@@ -39,10 +38,10 @@ async def list_cameras(
     ),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Camera)
-    org_id = current_org_id.get()
-    if org_id:
-        query = query.where(Camera.organization_id == org_id)
+    org_id = current_user.organization_id
+    if not org_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
+    query = select(Camera).where(Camera.organization_id == org_id)
     result = await db.execute(query.order_by(Camera.name))
     return result.scalars().all()
 
@@ -59,7 +58,10 @@ async def get_camera(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Camera).where(Camera.id == camera_id)
+        select(Camera).where(
+            Camera.id == camera_id,
+            Camera.organization_id == current_user.organization_id,
+        )
     )
 
     camera = result.scalar_one_or_none()
@@ -70,8 +72,8 @@ async def get_camera(
             detail="Camera not found",
         )
 
-    org_id = current_org_id.get()
-    if org_id and camera.organization_id and camera.organization_id != org_id:
+    org_id = current_user.organization_id if current_user else None
+    if current_user is not None and (not org_id or camera.organization_id != org_id):
         raise HTTPException(status_code=404, detail="Camera not found")
 
     return camera
@@ -90,7 +92,9 @@ async def create_camera(
     ),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = current_org_id.get()
+    org_id = current_user.organization_id
+    if not org_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
 
     if org_id:
         org_result = await db.execute(
@@ -107,7 +111,8 @@ async def create_camera(
 
     classroom_result = await db.execute(
         select(Classroom).where(
-            Classroom.id == camera_data.classroom_id
+            Classroom.id == camera_data.classroom_id,
+            Classroom.organization_id == org_id,
         )
     )
 
@@ -121,7 +126,8 @@ async def create_camera(
 
     existing_result = await db.execute(
         select(Camera).where(
-            Camera.camera_id == camera_data.camera_id
+            Camera.camera_id == camera_data.camera_id,
+            Camera.organization_id == org_id,
         )
     )
 
@@ -173,7 +179,10 @@ async def update_camera(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Camera).where(Camera.id == camera_id)
+        select(Camera).where(
+            Camera.id == camera_id,
+            Camera.organization_id == current_user.organization_id,
+        )
     )
 
     camera = result.scalar_one_or_none()
@@ -184,16 +193,13 @@ async def update_camera(
             detail="Camera not found",
         )
 
-    org_id = current_org_id.get()
-    if org_id and camera.organization_id and camera.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Camera not found")
-
     updates = camera_data.model_dump(exclude_unset=True)
 
     if "classroom_id" in updates:
         classroom_result = await db.execute(
             select(Classroom).where(
-                Classroom.id == updates["classroom_id"]
+                Classroom.id == updates["classroom_id"],
+                Classroom.organization_id == current_user.organization_id,
             )
         )
 
@@ -235,7 +241,10 @@ async def test_camera_connection(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Camera).where(Camera.id == camera_id)
+        select(Camera).where(
+            Camera.id == camera_id,
+            Camera.organization_id == current_user.organization_id,
+        )
     )
 
     camera = result.scalar_one_or_none()
@@ -363,7 +372,10 @@ async def camera_stream(
 ):
     """MJPEG proxy — streams the RTSP feed as multipart/x-mixed-replace."""
     result = await db.execute(
-        select(Camera).where(Camera.id == camera_id)
+        select(Camera).where(
+            Camera.id == camera_id,
+            Camera.organization_id == current_user.organization_id,
+        )
     )
     camera = result.scalar_one_or_none()
 
@@ -389,7 +401,10 @@ async def camera_snapshot(
 ):
     """Return a single JPEG frame from the RTSP stream."""
     result = await db.execute(
-        select(Camera).where(Camera.id == camera_id)
+        select(Camera).where(
+            Camera.id == camera_id,
+            Camera.organization_id == current_user.organization_id,
+        )
     )
     camera = result.scalar_one_or_none()
 
@@ -424,7 +439,10 @@ async def delete_camera(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Camera).where(Camera.id == camera_id)
+        select(Camera).where(
+            Camera.id == camera_id,
+            Camera.organization_id == current_user.organization_id,
+        )
     )
 
     camera = result.scalar_one_or_none()
@@ -434,10 +452,6 @@ async def delete_camera(
             status_code=404,
             detail="Camera not found",
         )
-
-    org_id = current_org_id.get()
-    if org_id and camera.organization_id and camera.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Camera not found")
 
     await log_audit(
         db, current_user, "delete", "camera",

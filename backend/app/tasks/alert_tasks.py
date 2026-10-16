@@ -35,9 +35,10 @@ async def _process_alert_inner(alert_id: str) -> None:
 
         # Send push notifications
         try:
-            tokens_result = await db.execute(
-                select(PushToken.token).where(PushToken.is_active)
-            )
+            token_query = select(PushToken.token).where(PushToken.is_active)
+            if alert.organization_id:
+                token_query = token_query.where(PushToken.organization_id == alert.organization_id)
+            tokens_result = await db.execute(token_query)
             tokens = [row[0] for row in tokens_result.all()]
             if tokens:
                 from backend.app.api.notifications import send_push_notification
@@ -68,7 +69,7 @@ async def _process_alert_inner(alert_id: str) -> None:
                     "camera_id": str(alert.camera_id) if alert.camera_id else None,
                     "created_at": alert.created_at.isoformat() if alert.created_at else None,
                 },
-            })
+            }, alert.organization_id)
         except Exception:
             logger.debug("WS broadcast failed for alert %s", alert_id, exc_info=True)
 

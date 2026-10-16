@@ -46,6 +46,7 @@ async def register_token(
         token=body.token,
         platform=body.platform,
         user_id=current_user.id,  # only signed-in staff receive alert notifications
+        organization_id=current_user.organization_id,
     )
     db.add(record)
     await db.commit()
@@ -59,7 +60,10 @@ async def list_tokens(
     _user=Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PushToken).where(PushToken.is_active)
+        select(PushToken).where(
+            PushToken.is_active,
+            PushToken.organization_id == _user.organization_id,
+        )
     )
     return result.scalars().all()
 
@@ -71,7 +75,10 @@ async def delete_token(
     _user=Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PushToken).where(PushToken.id == token_id)
+        select(PushToken).where(
+            PushToken.id == token_id,
+            PushToken.organization_id == _user.organization_id,
+        )
     )
     record = result.scalar_one_or_none()
     if not record:

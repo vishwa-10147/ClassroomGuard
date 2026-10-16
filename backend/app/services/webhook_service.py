@@ -4,14 +4,40 @@ import asyncio
 import hashlib
 import hmac
 import json
+import ipaddress
 import logging
+import socket
 import time
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import httpx
 from backend.app.models.webhook import Webhook
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_webhook_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Webhook URL must use http or https and include a hostname")
+    if parsed.username or parsed.password:
+        raise ValueError("Webhook URLs must not contain embedded credentials")
+
+    hostname = parsed.hostname.strip("[]").lower()
+    if hostname in {"localhost", "metadata.google.internal"}:
+        raise ValueError("Webhook URL points to a reserved host")
+    try:
+        addresses = {
+            result[4][0]
+            for result in socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+        }
+    except socket.gaierror as exc:
+        raise ValueError("Webhook hostname could not be resolved") from exc
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+            raise ValueError("Webhook URL points to a private or reserved network")
 
 
 async def deliver_webhook(
@@ -23,6 +49,7 @@ async def deliver_webhook(
 
     Returns a dict with status info for delivery logging.
     """
+    _validate_webhook_url(webhook.url)
     body = json.dumps({
         "event": event,
         "data": payload,
@@ -43,7 +70,7 @@ async def deliver_webhook(
     last_error = None
     start = time.monotonic()
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
         for attempt in range(3):
             try:
                 resp = await client.post(
@@ -82,6 +109,7 @@ async def test_webhook_delivery(
     headers: dict | None = None,
 ) -> dict:
     """Send a test ping to a webhook URL without writing to DB."""
+    _validate_webhook_url(url)
     body = json.dumps({
         "event": "test.ping",
         "data": {"message": "Webhook test from ClassroomGuard"},
@@ -98,7 +126,7 @@ async def test_webhook_delivery(
         final_headers["X-Webhook-Signature"] = f"sha256={sig}"
 
     start = time.monotonic()
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
         try:
             resp = await client.post(url, content=body, headers=final_headers)
             duration_ms = int((time.monotonic() - start) * 1000)

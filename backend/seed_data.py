@@ -91,7 +91,11 @@ async def seed_data():
 
         # Get user IDs for foreign keys
         users_result = await db.execute(select(User))
-        users = {u.role: u.id for u in users_result.scalars().all()}
+        seeded_users = users_result.scalars().all()
+        users = {u.role: u.id for u in seeded_users}
+        organization_id = next((u.organization_id for u in seeded_users if u.organization_id), None)
+        if organization_id is None:
+            raise RuntimeError("Seed users must belong to an organization before seed data is created")
         security_id = users.get("security", "unknown")
 
         # Create classrooms
@@ -103,6 +107,7 @@ async def seed_data():
                 floor=c["floor"],
                 room_number=c["room_number"],
                 total_seats=c["total_seats"],
+                organization_id=organization_id,
             )
             db.add(classroom)
         await db.flush()
@@ -120,6 +125,7 @@ async def seed_data():
                 resolution=c["resolution"],
                 ai_processing=c["ai_processing"],
                 ai_model=c.get("ai_model"),
+                organization_id=organization_id,
             )
             db.add(camera)
         await db.flush()
@@ -139,6 +145,7 @@ async def seed_data():
                 bounding_box=e.get("bounding_box"),
                 metadata_json=e.get("metadata_json"),
                 timestamp=now - timedelta(hours=len(EVENTS) - i),
+                organization_id=organization_id,
             )
             db.add(event)
         await db.flush()
@@ -159,6 +166,7 @@ async def seed_data():
                 acknowledged_at=now - timedelta(hours=2) if a["status"] != "active" else None,
                 resolved_by=users.get(a["resolved_by_role"]) if a.get("resolved_by_role") else None,
                 resolved_at=now - timedelta(hours=1) if a["status"] == "resolved" else None,
+                organization_id=organization_id,
             )
             db.add(alert)
         await db.flush()
@@ -176,6 +184,7 @@ async def seed_data():
                 camera_id=inc.get("camera_id"),
                 assigned_to=security_id if inc["status"] == "investigating" else None,
                 event_ids=inc.get("event_ids"),
+                organization_id=organization_id,
             )
             db.add(incident)
         await db.flush()
@@ -197,6 +206,7 @@ async def seed_data():
                 total_frames=r["total_frames"],
                 detection_count=r.get("detection_count", 0),
                 event_count=r.get("event_count", 0),
+                organization_id=organization_id,
             )
             db.add(recording)
         await db.flush()

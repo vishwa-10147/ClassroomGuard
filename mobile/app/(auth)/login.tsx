@@ -3,12 +3,6 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityInd
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/stores/AuthContext';
 
-const DEMO_ACCOUNTS = [
-  { label: 'Super Admin', email: 'admin@classguard.dev', password: 'Admin@12345' },
-  { label: 'Faculty', email: 'faculty@classguard.dev', password: 'Faculty@12345' },
-  { label: 'Security', email: 'security@classguard.dev', password: 'Security@12345' },
-];
-
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,14 +36,6 @@ export default function LoginScreen() {
           {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Sign In</Text>}
         </TouchableOpacity>
 
-        <Text style={styles.demoLabel}>Quick Login:</Text>
-        <View style={styles.demoRow}>
-          {DEMO_ACCOUNTS.map((a) => (
-            <TouchableOpacity key={a.email} style={styles.demoBtn} onPress={() => { setEmail(a.email); setPassword(a.password); }}>
-              <Text style={styles.demoBtnText}>{a.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -63,8 +49,4 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155', borderRadius: 12, padding: 16, fontSize: 16, color: '#F8FAFC', marginBottom: 16 },
   button: { backgroundColor: '#3B82F6', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 24 },
   buttonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  demoLabel: { color: '#64748B', textAlign: 'center', marginBottom: 8, fontSize: 12 },
-  demoRow: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  demoBtn: { backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  demoBtnText: { color: '#94A3B8', fontSize: 11 },
 });

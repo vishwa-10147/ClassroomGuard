@@ -8,7 +8,7 @@ from backend.app.schemas.webhook import (
     WebhookTestResponse,
     WebhookUpdate,
 )
-from backend.app.services.webhook_service import test_webhook_delivery
+from backend.app.services.webhook_service import _validate_webhook_url, test_webhook_delivery
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +41,12 @@ async def create_webhook(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_permission("webhooks:manage")),
 ):
+    if not user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
+    try:
+        _validate_webhook_url(body.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     webhook = Webhook(
         name=body.name,
         url=body.url,
@@ -48,7 +54,7 @@ async def create_webhook(
         events=body.events,
         headers=body.headers,
         is_active=body.is_active,
-        organization_id=body.organization_id,
+        organization_id=user.organization_id,
         created_by=user.id,
     )
     db.add(webhook)
@@ -64,8 +70,11 @@ async def list_webhooks(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("webhooks:view")),
 ):
+    if not _user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
     query = (
         select(Webhook)
+        .where(Webhook.organization_id == _user.organization_id)
         .order_by(Webhook.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
@@ -79,9 +88,13 @@ async def webhook_count(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("webhooks:view")),
 ):
-    total = await db.scalar(select(func.count()).select_from(Webhook))
+    if not _user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
+    total = await db.scalar(select(func.count()).select_from(Webhook).where(Webhook.organization_id == _user.organization_id))
     active = await db.scalar(
-        select(func.count()).select_from(Webhook).where(Webhook.is_active.is_(True))
+        select(func.count()).select_from(Webhook).where(
+            Webhook.is_active.is_(True), Webhook.organization_id == _user.organization_id
+        )
     )
     return {"total": total or 0, "active": active or 0}
 
@@ -92,7 +105,9 @@ async def get_webhook(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("webhooks:view")),
 ):
-    result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
+    result = await db.execute(select(Webhook).where(
+        Webhook.id == webhook_id, Webhook.organization_id == _user.organization_id
+    ))
     webhook = result.scalar_one_or_none()
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
@@ -106,12 +121,20 @@ async def update_webhook(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("webhooks:manage")),
 ):
-    result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
+    result = await db.execute(select(Webhook).where(
+        Webhook.id == webhook_id, Webhook.organization_id == _user.organization_id
+    ))
     webhook = result.scalar_one_or_none()
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
 
     update_data = body.model_dump(exclude_unset=True)
+    update_data.pop("organization_id", None)
+    if "url" in update_data and update_data["url"]:
+        try:
+            _validate_webhook_url(update_data["url"])
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     for field, value in update_data.items():
         setattr(webhook, field, value)
 
@@ -126,7 +149,9 @@ async def delete_webhook(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("webhooks:manage")),
 ):
-    result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
+    result = await db.execute(select(Webhook).where(
+        Webhook.id == webhook_id, Webhook.organization_id == _user.organization_id
+    ))
     webhook = result.scalar_one_or_none()
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
@@ -140,7 +165,9 @@ async def test_webhook(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("webhooks:manage")),
 ):
-    result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
+    result = await db.execute(select(Webhook).where(
+        Webhook.id == webhook_id, Webhook.organization_id == _user.organization_id
+    ))
     webhook = result.scalar_one_or_none()
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
@@ -161,13 +188,19 @@ async def list_deliveries(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("webhooks:view")),
 ):
-    result = await db.execute(select(Webhook).where(Webhook.id == webhook_id))
+    result = await db.execute(select(Webhook).where(
+        Webhook.id == webhook_id, Webhook.organization_id == _user.organization_id
+    ))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Webhook not found")
 
     query = (
         select(WebhookDelivery)
-        .where(WebhookDelivery.webhook_id == webhook_id)
+        .join(Webhook, Webhook.id == WebhookDelivery.webhook_id)
+        .where(
+            WebhookDelivery.webhook_id == webhook_id,
+            Webhook.organization_id == _user.organization_id,
+        )
         .order_by(WebhookDelivery.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)

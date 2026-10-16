@@ -2,6 +2,7 @@ import json
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+import logging
 
 from backend.app.core.config import settings
 from backend.app.core.database import engine, init_db
@@ -9,10 +10,13 @@ from backend.app.core.rate_limit import limiter
 from backend.app.core.security import decode_access_token
 from backend.app.core.security_headers import SecurityHeadersMiddleware
 from backend.app.core.websocket import manager
+from backend.app.middleware.metrics import MetricsMiddleware
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -20,7 +24,9 @@ async def lifespan(app: FastAPI):
     try:
         await init_db()
     except Exception as e:
-        print(f"Warning: Could not create tables: {e}")
+        logger.exception("Could not initialize the database")
+        if _is_production:
+            raise RuntimeError("Database initialization failed") from e
     yield
 
 
@@ -40,13 +46,14 @@ app = FastAPI(
 app.state.limiter = limiter
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(MetricsMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Range", "X-Service-Token"],
     max_age=600,
 )
 
@@ -72,6 +79,7 @@ from backend.app.api.uploads import router as uploads_router
 from backend.app.api.users import router as users_router
 from backend.app.api.webhooks import router as webhooks_router
 from backend.app.models.camera import Camera
+from backend.app.models.user import User
 from prometheus_client import make_asgi_app
 
 app.include_router(auth_router)
@@ -171,16 +179,32 @@ async def api_status():
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    db: AsyncSession = Depends(get_db),
+):
     # Live alerts are sensitive: require a valid access token (?token=...)
     try:
         payload = decode_access_token(websocket.query_params.get("token", ""))
-        if payload.get("type", "access") != "access" or not payload.get("sub"):
+        if payload.get("type") != "access" or not payload.get("sub") or not payload.get("organization_id"):
             raise ValueError("invalid token")
+        origin = websocket.headers.get("origin")
+        if origin and origin not in settings.allowed_origins:
+            raise ValueError("invalid origin")
+        user = (await db.execute(
+            select(User).where(
+                User.id == payload["sub"],
+                User.organization_id == payload["organization_id"],
+                User.is_active.is_(True),
+                User.status == "active",
+            )
+        )).scalar_one_or_none()
+        if user is None:
+            raise ValueError("inactive user")
     except Exception:
         await websocket.close(code=1008)
         return
-    await manager.connect(websocket)
+    await manager.connect(websocket, user.organization_id)
     try:
         while True:
             data = await websocket.receive_text()

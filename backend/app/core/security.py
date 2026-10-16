@@ -56,7 +56,7 @@ def create_refresh_token(user_id: str) -> tuple[str, str, datetime]:
     """Create a refresh token. Returns (raw_token, token_hash, expires_at)."""
     raw_token = secrets.token_urlsafe(64)
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-    expires_at = datetime.now(UTC) + timedelta(days=7)
+    expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
     return raw_token, token_hash, expires_at
 
 

@@ -4,7 +4,7 @@ from typing import Any
 
 from backend.app.core.database import engine
 from backend.app.core.redis import redis_health_check
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -56,8 +56,19 @@ async def health_readiness() -> dict[str, Any]:
         "database": await _check_database(),
         "redis": await _check_redis(),
     }
+    overall = _overall_status(checks)
+    if overall != "healthy":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "status": overall,
+                "version": "1.0.0",
+                "uptime_seconds": round(time.monotonic() - _START_TIME, 1),
+                "checks": checks,
+            },
+        )
     return {
-        "status": _overall_status(checks),
+        "status": overall,
         "version": "1.0.0",
         "uptime_seconds": round(time.monotonic() - _START_TIME, 1),
         "checks": checks,

@@ -74,7 +74,10 @@ async def create_alert_and_notify(
 
     # Notification channels are best effort: a failing channel must never lose the alert
     try:
-        tokens = (await db.execute(select(PushToken.token).where(PushToken.is_active))).scalars().all()
+        token_query = select(PushToken.token).where(PushToken.is_active)
+        if organization_id:
+            token_query = token_query.where(PushToken.organization_id == organization_id)
+        tokens = (await db.execute(token_query)).scalars().all()
         for token in tokens:
             await send_push_notification(
                 token=token, title=alert.title, body=alert.description,
@@ -83,11 +86,11 @@ async def create_alert_and_notify(
     except Exception:
         logger.exception("Push notification failed for alert %s", alert.id)
 
-    await manager.broadcast({"type": "alert", "payload": payload})
+    await manager.broadcast({"type": "alert", "payload": payload}, organization_id)
 
     try:
         from backend.app.core.webhook_dispatcher import dispatch_event
-        await dispatch_event("alert.created", payload)
+        await dispatch_event("alert.created", payload, organization_id=organization_id)
     except Exception:
         logger.exception("Webhook dispatch failed for alert %s", alert.id)
 

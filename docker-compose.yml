@@ -24,8 +24,10 @@ x-backend-env: &backend-env
   ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-["http://localhost:3000"]}
   STORAGE_PATH: /app/storage
   USE_REDIS: "true"
-  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
+  FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
   AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env (32+ random characters)}
+  RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
   SMTP_HOST: ${SMTP_HOST:-}
   SMTP_PORT: ${SMTP_PORT:-587}
   SMTP_USERNAME: ${SMTP_USERNAME:-}
@@ -42,7 +44,7 @@ services:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-classroomguard}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}  # required locally via the backend DATABASE_URL default
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-classroomguard}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -58,7 +60,9 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
     volumes:
       - redisdata:/data
     networks: [classguard-net]
@@ -192,7 +196,7 @@ services:
       - grafana_data:/var/lib/grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}  # localhost-only; Grafana forces a change on first login
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env when using monitoring}
     networks: [classguard-net]
     depends_on: [prometheus]
     restart: unless-stopped

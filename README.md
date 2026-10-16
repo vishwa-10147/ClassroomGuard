@@ -139,11 +139,29 @@ Operations: `scripts/backup.sh`, `scripts/restore.sh`, `scripts/update.sh`.
 - HTTPS only on-premise (Caddy); only ports 80 and 443 are exposed.
 - Short-lived JWT access tokens with rotating, revocable refresh tokens stored hashed; sign-in and
   password reset are rate limited; reset links are single-use and stored hashed.
-- Role-based access control on every endpoint from one permission catalogue
+- Role-based access control on protected endpoints from one permission catalogue
   (`backend/app/core/permissions.py`); only super admins can create or promote super admins.
 - The AI engine authenticates with a dedicated service token; live updates require a signed-in user.
 - The API refuses to start in production with a weak `JWT_SECRET`; containers run as non-root.
 - Evidence frames are deleted automatically after the retention period set in System Settings.
+
+### Production hardening checklist
+
+Before exposing an installation to real users:
+
+1. Copy `.env.example` to `.env`, generate unique secrets, and keep the file outside source control.
+   Production requires `JWT_SECRET`, `AI_SERVICE_TOKEN`, `POSTGRES_PASSWORD`, and `REDIS_PASSWORD`.
+2. Set explicit HTTPS `FRONTEND_URL` and `ALLOWED_ORIGINS`; never use localhost origins in staging or
+   production.
+3. Use the readiness endpoint (`/health/ready`) for load-balancer and container health checks. It
+   returns `503` when PostgreSQL or Redis is unavailable.
+4. Put Prometheus and Grafana on an administration-only network, set a unique Grafana password, and
+   do not expose their ports publicly.
+5. Use organization-scoped accounts and verify cross-organization access with the backend test suite
+   before importing existing data. Existing legacy rows with a null `organization_id` require a
+   migration/ownership decision before production use.
+6. Rotate any credentials that may have existed in local `.env` or backup files, and remove real
+   student evidence from source trees and deployment archives.
 
 ClassroomGuard processes video of students. Colleges should inform students and staff, set a
 retention period that matches their examination rules, and treat every alert as a prompt for an

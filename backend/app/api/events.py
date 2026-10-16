@@ -37,9 +37,12 @@ async def create_event(
 
     # The AI engine may send the camera's internal id or the code staff gave it in the web app;
     # the classroom always comes from the camera so the two can never disagree.
-    camera = (await db.execute(
-        select(Camera).where(or_(Camera.id == body.camera_id, Camera.camera_id == body.camera_id))
-    )).scalar_one_or_none()
+    camera_query = select(Camera).where(
+        or_(Camera.id == body.camera_id, Camera.camera_id == body.camera_id)
+    )
+    if _user is not None:
+        camera_query = camera_query.where(Camera.organization_id == _user.organization_id)
+    camera = (await db.execute(camera_query)).scalar_one_or_none()
     if camera is None:
         raise HTTPException(
             status_code=422,
@@ -75,7 +78,7 @@ async def create_event(
             "classroomName": room,
             "message": message,
         },
-    })
+    }, event.organization_id)
 
     # Cheating cues from the AI become alerts so invigilators are notified in real time
     if event.severity in ALERTING_SEVERITIES:
@@ -119,6 +122,10 @@ async def list_events(
         .join(Camera, DetectionEvent.camera_id == Camera.id, isouter=True)
     )
     count_query = select(func.count()).select_from(DetectionEvent)
+    if not _user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
+    base = base.where(DetectionEvent.organization_id == _user.organization_id)
+    count_query = count_query.where(DetectionEvent.organization_id == _user.organization_id)
 
     if classroom_id:
         base = base.where(DetectionEvent.classroom_id == classroom_id)
@@ -164,6 +171,9 @@ async def recent_events(
         .order_by(desc(DetectionEvent.timestamp))
         .limit(limit)
     )
+    if not _user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
+    query = query.where(DetectionEvent.organization_id == _user.organization_id)
     result = await db.execute(query)
     rows = result.all()
     return [_enrich_event(row[0], row.c_name, row.cam_name) for row in rows]
@@ -179,7 +189,10 @@ async def get_event(
         select(DetectionEvent, Classroom.name.label("c_name"), Camera.name.label("cam_name"))
         .join(Classroom, DetectionEvent.classroom_id == Classroom.id, isouter=True)
         .join(Camera, DetectionEvent.camera_id == Camera.id, isouter=True)
-        .where(DetectionEvent.id == event_id)
+        .where(
+            DetectionEvent.id == event_id,
+            DetectionEvent.organization_id == _user.organization_id,
+        )
     )
     result = await db.execute(query)
     row = result.first()

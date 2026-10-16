@@ -125,7 +125,7 @@ async def register(
     return LoginResponse(
         access_token=token,
         refresh_token=raw_refresh,
-        expires_in=900,
+        expires_in=settings.access_token_expire_minutes * 60,
         user=UserResponse.model_validate(user),
     )
 
@@ -183,7 +183,7 @@ async def login(
     return LoginResponse(
         access_token=token,
         refresh_token=raw_refresh,
-        expires_in=900,
+        expires_in=settings.access_token_expire_minutes * 60,
         user=UserResponse.model_validate(user),
     )
 
@@ -224,7 +224,7 @@ async def refresh_token(
     )
     user = user_result.scalar_one_or_none()
 
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.status != "active":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
@@ -253,7 +253,7 @@ async def refresh_token(
     return TokenResponse(
         access_token=new_access,
         refresh_token=raw_new_refresh,
-        expires_in=900,
+        expires_in=settings.access_token_expire_minutes * 60,
     )
 
 
