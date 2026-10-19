@@ -28,6 +28,10 @@ async def lifespan(app: FastAPI):
         if _is_production:
             raise RuntimeError("Database initialization failed") from e
     yield
+    if settings.enable_tracing:
+        from backend.app.core.tracing import shutdown_tracing
+
+        shutdown_tracing()
 
 
 _is_production = settings.app_env == "production"
@@ -44,6 +48,17 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
+
+# Optional observability: off unless SENTRY_DSN / ENABLE_TRACING are set
+if settings.sentry_dsn:
+    from backend.app.core.error_tracking import setup_sentry
+
+    setup_sentry(dsn=settings.sentry_dsn, environment=settings.app_env)
+
+if settings.enable_tracing:
+    from backend.app.core.tracing import setup_tracing
+
+    setup_tracing(app, service_name="classroomguard-api", otlp_endpoint=settings.otlp_endpoint)
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MetricsMiddleware)
@@ -63,6 +78,7 @@ from backend.app.api.auth import router as auth_router
 from backend.app.api.cameras import router as cameras_router
 from backend.app.api.classrooms import router as classrooms_router
 from backend.app.api.compliance import router as compliance_router
+from backend.app.api.dashboard import router as dashboard_router
 from backend.app.api.dependencies import get_db, require_permission_or_service
 from backend.app.api.events import router as events_router
 from backend.app.api.evidence import router as evidence_router
@@ -88,6 +104,7 @@ app.include_router(search_router)
 app.include_router(classrooms_router)
 app.include_router(cameras_router)
 app.include_router(alerts_router)
+app.include_router(dashboard_router)
 app.include_router(events_router)
 app.include_router(recordings_router)
 app.include_router(incidents_router)

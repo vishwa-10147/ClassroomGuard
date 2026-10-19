@@ -144,7 +144,7 @@ Messages are delivered only to connections of the same organisation.
 
 ## Endpoint reference
 
-Generated from the application's route table for v1.0.0 (106 routes plus `/`). "Access"
+Generated from the application's route table for v1.0.1 (107 routes plus `/`). "Access"
 is the permission the caller needs.
 
 ### Authentication
@@ -236,6 +236,27 @@ is the permission the caller needs.
 | POST | `/api/v1/alerts/{alert_id}/acknowledge` | `alerts:manage` |
 | POST | `/api/v1/alerts/{alert_id}/resolve` | `alerts:manage` |
 | POST | `/api/v1/alerts/{alert_id}/assign` | `alerts:manage` |
+
+### Dashboard
+
+| Method | Path | Access |
+|---|---|---|
+| GET | `/api/v1/dashboard/stats` | `alerts:read` |
+
+Counts for the caller's organisation, used by the mobile Dashboard tab:
+
+```json
+{
+  "total_cameras": 4,
+  "active_cameras": 3,
+  "total_classrooms": 2,
+  "active_alerts": 5,
+  "total_alerts_today": 12
+}
+```
+
+`active_cameras` counts cameras whose status is `online`. `total_alerts_today` counts alerts
+created since 00:00 UTC.
 
 ### Incidents
 

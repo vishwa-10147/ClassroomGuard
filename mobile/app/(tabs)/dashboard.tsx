@@ -50,7 +50,7 @@ export default function DashboardScreen() {
     { icon: 'videocam', label: 'Active Cameras', value: stats.active_cameras, color: '#3B82F6' },
     { icon: 'alert-circle', label: 'Active Alerts', value: stats.active_alerts, color: '#EF4444' },
     { icon: 'school', label: 'Classrooms', value: stats.total_classrooms, color: '#10B981' },
-    { icon: 'people', label: 'Users', value: stats.total_users, color: '#8B5CF6' },
+    { icon: 'today', label: 'Alerts Today', value: stats.total_alerts_today, color: '#8B5CF6' },
   ] : [], [stats]);
 
   return (

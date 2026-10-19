@@ -392,11 +392,10 @@ period that matches their examination rules
   not connected yet. The AI engine analyses live camera streams only.
 - **Head-turn and looking-down cues** are implemented but disabled by default. On overhead
   cameras they fire on normal exam behaviour and need per-camera calibration.
-- **Mobile app:** the Dashboard tab calls an endpoint that does not exist yet
-  (`/dashboard/stats`); the Alerts and Cameras tabs work. Push notifications need an Expo (EAS)
-  project ID.
-- **Observability:** Sentry and OpenTelemetry helpers exist in `backend/app/core` but are not
-  initialised. `/metrics` (Prometheus, internal network only) records request metrics.
+- **Mobile app:** push notifications need an Expo (EAS) project ID.
+- **Observability:** Sentry and OpenTelemetry are off unless `SENTRY_DSN` or `ENABLE_TRACING`
+  is set (see [Configuration](docs/CONFIGURATION.md#observability)). No collector or Sentry
+  server is bundled. `/metrics` (Prometheus, internal network only) records request metrics.
 - **Webhooks** can only target public addresses: URLs that resolve to private, loopback or
   link-local networks are rejected to prevent server-side request forgery. A webhook receiver on
   the campus LAN is therefore not supported.

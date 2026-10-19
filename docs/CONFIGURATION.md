@@ -94,10 +94,20 @@ Used by `docker-compose.ai-host.yml`:
 | `GRAFANA_ADMIN_USER` | Grafana admin user (default `admin`) |
 | `AWS_REGION`, `CLOUDWATCH_LOG_GROUP` | AWS overlay: CloudWatch Logs settings ([DEPLOY_AWS.md](DEPLOY_AWS.md)) |
 
-### Observability (not wired yet)
+### Observability
 
-`SENTRY_DSN`, `ENABLE_TRACING` and `OTLP_ENDPOINT` are read by the settings class, but the API
-does not initialise Sentry or OpenTelemetry yet. Setting them has no effect in v1.0.0.
+Both integrations are off by default. With the variables unset, the API behaves exactly as
+before and does not import either library.
+
+| Variable | Description |
+|---|---|
+| `SENTRY_DSN` | Sentry project DSN. When set, the API reports unhandled errors to Sentry, tagged with `APP_ENV` as the environment, and samples 10% of requests for performance traces |
+| `ENABLE_TRACING` | `true` to export OpenTelemetry traces for every API request (service name `classroomguard-api`). Default `false` |
+| `OTLP_ENDPOINT` | OTLP gRPC collector address used when `ENABLE_TRACING=true` (default `http://localhost:4317`). Inside Docker, point it at a collector on the Compose network, not `localhost` |
+
+The `sentry-sdk` and `opentelemetry-*` packages are already in `backend/requirements.txt`. If
+initialisation fails (for example, a missing package), the API logs a warning and starts
+without that integration. Neither setting changes `/metrics`.
 
 ## AI engine (`ai/config.yaml`)
 
