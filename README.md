@@ -1,11 +1,21 @@
-# ClassroomGuard
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="ClassroomGuard logo" width="120" height="120">
+</p>
 
-**AI-assisted exam-hall monitoring.** ClassroomGuard watches classroom CCTV cameras, detects
-students using a **mobile phone** or an unpermitted **calculator**, and alerts invigilators in
-real time with an annotated evidence frame. Staff review and act on alerts from a web dashboard
-or a mobile app.
+<h1 align="center">ClassroomGuard</h1>
 
-[![CI](https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml)
+<p align="center">
+  <strong>AI-assisted exam-hall monitoring</strong><br>
+  Detects mobile phones and unpermitted calculators on classroom CCTV and alerts invigilators in real time.
+</p>
+
+<p align="center">
+  <a href="https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml"><img src="https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+ClassroomGuard watches classroom CCTV cameras, detects students using a **mobile phone** or an
+unpermitted **calculator**, and alerts invigilators in real time with an annotated evidence frame.
+Staff review and act on alerts from a web dashboard or a mobile app.
 
 > **Installing it on a college server?** Follow **[SETUP.md](SETUP.md)**.
 > The operations guide for IT departments is [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md).
@@ -61,7 +71,9 @@ person to check, never proof on its own (see [Detection accuracy](#detection-acc
 |---|---|
 | **Detection** | Phone and calculator detection; per-person association; in-hand vs. at-desk severity; calculator rule switchable per exam |
 | **Real-time monitoring** | Alerts, detection events and dashboard figures update over WebSocket without reloading; AI engine and camera status reported every 30 s; cameras marked offline when they stop reporting |
-| **Investigation** | Detection events with evidence frames; alerts (acknowledge, assign, resolve); incidents; live camera view when a stream URL is configured |
+| **Investigation** | Detection events with evidence frames, search and filters; alerts (acknowledge, assign, resolve, escalate to an incident); incidents with notes, assignment and escalation; live camera view when a stream URL is configured |
+| **Recordings** | Upload exam footage for AI analysis with the same rules as live cameras; live progress and cancel; detections listed with their time in the video |
+| **Seats and zones** | Draw seat zones on each camera so detections name the seat; ignore zones keep invigilators and aisles from being flagged |
 | **Reporting** | Period and classroom summaries with a daily breakdown; CSV and PDF export |
 | **Administration** | Users and five built-in roles; permission matrix; audit log; system settings; webhooks (Slack, Microsoft Teams, custom) |
 | **Accounts** | Email password reset; automatic session renewal; rate-limited sign-in; accounts created by administrators |
@@ -386,19 +398,21 @@ period that matches their examination rules
 
 - **Accuracy:** some phones are missed (see [Detection accuracy](#detection-accuracy)).
   Calculator detection has been validated on photographs, not yet on CCTV footage.
-- **Who is who:** detections are tied to a tracked person and a camera, not to a named student
-  or seat. Invigilators are tracked like students.
-- **Recordings:** uploaded recordings are stored and playable, but automatic offline analysis is
-  not connected yet. The AI engine analyses live camera streams only.
+- **Who is who:** detections name a seat only where seat zones have been drawn for the camera,
+  and never a named student. Invigilators are only excluded inside ignore zones; one walking
+  between rows is tracked like a student.
+- **Recordings:** analysis needs the `ai-recordings` worker running on a GPU machine. Uploads are
+  limited to 500 MB per file.
 - **Head-turn and looking-down cues** are implemented but disabled by default. On overhead
   cameras they fire on normal exam behaviour and need per-camera calibration.
-- **Mobile app:** push notifications need an Expo (EAS) project ID.
+- **Mobile app:** push notifications need the college's Expo (EAS) project ID at build time
+  (`EAS_PROJECT_ID`, see [Configuration](docs/CONFIGURATION.md#mobile-app-mobileenv)).
 - **Observability:** Sentry and OpenTelemetry are off unless `SENTRY_DSN` or `ENABLE_TRACING`
   is set (see [Configuration](docs/CONFIGURATION.md#observability)). No collector or Sentry
   server is bundled. `/metrics` (Prometheus, internal network only) records request metrics.
-- **Webhooks** can only target public addresses: URLs that resolve to private, loopback or
-  link-local networks are rejected to prevent server-side request forgery. A webhook receiver on
-  the campus LAN is therefore not supported.
+- **Webhooks** reach public addresses only, unless the private networks of a campus receiver
+  are listed in `WEBHOOK_ALLOWED_NETWORKS`. Loopback and link-local addresses are always refused
+  to prevent server-side request forgery.
 - The largest accuracy gain will come from retraining with labelled footage from the college's
   own halls ([ai/README.md → Improving the model](ai/README.md#improving-the-model)).
 

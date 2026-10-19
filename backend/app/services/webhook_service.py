@@ -12,12 +12,27 @@ from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import httpx
+from backend.app.core.config import settings
 from backend.app.models.webhook import Webhook
 
 logger = logging.getLogger(__name__)
 
 
-def _validate_webhook_url(url: str) -> None:
+def _address_allowed(ip: ipaddress.IPv4Address | ipaddress.IPv6Address, allowed_networks: list[str]) -> bool:
+    """Public addresses, plus private ones inside WEBHOOK_ALLOWED_NETWORKS.
+
+    Loopback, link-local (cloud metadata services) and multicast are never allowed: they are the
+    usual targets of server-side request forgery and no webhook receiver lives there.
+    """
+    if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        return False
+    if not (ip.is_private or ip.is_reserved):
+        return True
+    return any(ip in ipaddress.ip_network(net, strict=False) for net in allowed_networks)
+
+
+def _validate_webhook_url(url: str, allowed_networks: list[str] | None = None) -> None:
+    allowed = settings.webhook_allowed_networks if allowed_networks is None else allowed_networks
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("Webhook URL must use http or https and include a hostname")
@@ -35,9 +50,12 @@ def _validate_webhook_url(url: str) -> None:
     except socket.gaierror as exc:
         raise ValueError("Webhook hostname could not be resolved") from exc
     for address in addresses:
-        ip = ipaddress.ip_address(address)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
-            raise ValueError("Webhook URL points to a private or reserved network")
+        ip = ipaddress.ip_address(address.split("%", 1)[0])  # drop an IPv6 zone id
+        if not _address_allowed(ip, allowed):
+            raise ValueError(
+                "Webhook URL points to a private or reserved network"
+                + (" outside WEBHOOK_ALLOWED_NETWORKS" if allowed else "")
+            )
 
 
 async def deliver_webhook(

@@ -35,6 +35,7 @@ x-backend-env: &backend-env
   SMTP_FROM: ${SMTP_FROM:-ClassroomGuard <no-reply@localhost>}
   SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
   SMTP_SSL: ${SMTP_SSL:-false}
+  WEBHOOK_ALLOWED_NETWORKS: ${WEBHOOK_ALLOWED_NETWORKS:-[]}
   TZ: ${TZ:-Asia/Kolkata}
 
 services:

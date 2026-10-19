@@ -1,3 +1,17 @@
+export interface IncidentNote {
+  id: string;
+  text: string;
+  author: string;
+  authorId?: string;
+  timestamp: string;
+}
+
+export interface IncidentAssignee {
+  id: string;
+  name: string;
+  role: string;
+}
+
 export interface Incident {
   id: string;
   title: string;
@@ -12,7 +26,7 @@ export interface Incident {
   assigneeName?: string;
   eventIds?: string[];
   evidence?: unknown[];
-  notes?: { id: string; text: string; author: string; timestamp: string }[];
+  notes?: IncidentNote[];
   evidenceCount?: number;
   createdAt: string;
   updatedAt: string;

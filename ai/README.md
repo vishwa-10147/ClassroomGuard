@@ -109,7 +109,32 @@ $env:AI_SERVICE_TOKEN = "<same value as the API>"
 
 macOS has no CUDA support; the engine falls back to the CPU, which is too slow for live cameras.
 
-Or with Docker: `docker compose --profile ai up -d ai` from the repository root.
+Or with Docker: `docker compose --profile ai up -d` from the repository root (starts `ai` and
+`ai-recordings`).
+
+### Uploaded recordings
+
+`recording_worker.py` analyses footage uploaded on the Recordings page. It runs every sampled
+frame through the same pipeline as the live engine (`src/pipeline.py`), timed by the position in
+the video, and posts each detection as an event linked to the recording.
+
+```bash
+.venv/bin/python recording_worker.py --config config_exam.yaml
+```
+
+It needs the same `BACKEND_URL` and `AI_SERVICE_TOKEN`. Videos are read from `storage/uploads`
+when that folder is shared with the API and downloaded from it otherwise. One worker handles one
+recording at a time; start more (on other GPUs) to analyse several at once.
+
+### Seat and ignore zones
+
+Staff draw zones on each camera in the web app (Cameras → Seats & zones). The live engine fetches
+them every minute and the worker receives them with each job (`src/zones.py`):
+
+- **Seat**: a detection whose object (or, failing that, student) is inside is reported with the
+  seat's label. Where seats overlap the smaller one wins.
+- **Ignore**: people and objects whose centre is inside are dropped before tracking, so the
+  invigilator's desk or an aisle never produces an alert.
 
 | Config | Use |
 |---|---|
@@ -127,6 +152,7 @@ Key settings:
 | `cheating_rules.phone_usage.alert_after_seconds` | How long a phone must stay with a student |
 | `cheating_rules.calculator_usage.allowed` | `true` for exams where calculators are permitted |
 | `alerts.object_cooldown` | Minimum time between alerts for the same student or desk |
+| `recording_analysis.analysis_fps` | Frames analysed per second of uploaded video |
 
 ## Training and evaluation
 
@@ -154,5 +180,5 @@ The largest gain will come from footage of your own halls:
 ## Tests
 
 ```bash
-cd ai && python -m pytest tests/    # rules engine, object assignment, timing, alert de-duplication
+cd ai && python -m pytest tests/    # rules, object assignment, timing, de-duplication, zones, recording worker
 ```

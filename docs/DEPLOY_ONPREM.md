@@ -198,7 +198,9 @@ REQUESTS_CA_BUNDLE=/certs/root.crt
 ```
 
 Mount the main server's `storage/` folder on this machine at `./storage` (NFS or SMB share) so
-evidence frames appear in the web app, then start the engine:
+evidence frames appear in the web app, then start the engine. This also starts `ai-recordings`,
+which analyses recordings uploaded in the web app (without the share it downloads each video
+from the API, but its evidence frames will then not appear):
 
 ```bash
 sudo docker compose -f docker-compose.ai-host.yml up -d --build

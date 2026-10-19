@@ -26,15 +26,15 @@ export interface DetectionEvent {
 
   seatId?: string;
 
+  /** Set when the detection was found in an uploaded recording */
+  recordingId?: string | null;
+
   confidence?: number;
 
   trackerId?: string;
 
-  /**
-   * Bounding box represented as:
-   * [left, top, right, bottom]
-   */
-  boundingBox?: [number, number, number, number];
+  /** Object position in the frame, in pixels */
+  boundingBox?: { x: number; y: number; w: number; h: number } | null;
 
   frameUrl?: string;
 

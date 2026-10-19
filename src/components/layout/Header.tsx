@@ -114,7 +114,7 @@ export function Header() {
             </button>
           }
         >
-          <NotificationPanel />
+          <NotificationPanel onNavigate={() => setNotificationOpen(false)} />
         </Popover>
 
         {/* User Dropdown */}

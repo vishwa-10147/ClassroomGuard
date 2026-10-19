@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { Camera } from '@/types/camera.types';
+import type { Camera, CameraZone } from '@/types/camera.types';
 import type { Classroom } from '@/types/classroom.types';
 
 // The API answers in camelCase; snake_case is accepted too for older backends.
@@ -21,6 +21,7 @@ const normalizeCamera = (camera: CameraApiResponse): Camera => ({
   aiModel: pick(camera, 'aiModel', 'ai_model') ?? undefined,
   inferenceMs: pick(camera, 'inferenceMs', 'inference_ms') ?? undefined,
   lastFrameAt: pick(camera, 'lastFrameAt', 'last_frame_at') ?? undefined,
+  zones: camera.zones ?? [],
   createdAt: pick(camera, 'createdAt', 'created_at'),
   updatedAt: pick(camera, 'updatedAt', 'updated_at'),
 });
@@ -102,6 +103,7 @@ export const cameraService = {
       aiModel: string;
       inferenceMs: number;
       lastFrameAt: string;
+      zones: CameraZone[];
     }>
   ): Promise<Camera> => {
     const payload = {
@@ -129,6 +131,7 @@ export const cameraService = {
       ...(data.lastFrameAt !== undefined && {
         last_frame_at: data.lastFrameAt,
       }),
+      ...(data.zones !== undefined && { zones: data.zones }),
     };
 
     const response = await apiClient.patch<CameraApiResponse>(

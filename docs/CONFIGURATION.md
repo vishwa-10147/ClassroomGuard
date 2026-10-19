@@ -40,6 +40,7 @@ Generate values with `openssl rand -hex 32`.
 | `FORWARDED_ALLOW_IPS` | Private ranges | Proxies whose `X-Forwarded-*` headers the API trusts |
 | `RATE_LIMIT_ENABLED` | `true` | Set `false` only for automated test runs |
 | `ALLOW_SELF_REGISTRATION` | `false` | Enables public `POST /api/v1/auth/register`, which creates a new organisation. Keep `false` for college installs |
+| `WEBHOOK_ALLOWED_NETWORKS` | `[]` | JSON list of private networks webhooks may deliver to, for a receiver on the campus LAN, e.g. `["10.20.0.0/16"]`. Empty allows public addresses only. Loopback, link-local (cloud metadata) and multicast addresses are refused even when listed |
 | `TZ` | – | Container time zone, for example `Asia/Kolkata` |
 
 ### Email
@@ -86,6 +87,10 @@ Used by `docker-compose.ai-host.yml`:
 | `AI_ENGINE_NAME` | Name shown for this engine in `/api/v1/status` |
 | `REQUESTS_CA_BUNDLE` | Path to the main server's root certificate when it uses Caddy's internal CA |
 
+Both files also start `ai-recordings`, the worker that analyses uploaded recordings. It uses the
+same image, models and `config.yaml`. When it does not share the main server's storage folder it
+downloads each video from the API.
+
 ### Monitoring and AWS
 
 | Variable | Description |
@@ -129,6 +134,25 @@ cameras:
 `source` also accepts a video file path or a webcam index for testing. Use a camera account that
 can only view streams.
 
+### Seat and ignore zones
+
+Drawn per camera in the web app (**Cameras → ⋮ → Seats & zones**), not in this file. Live engines
+fetch them every minute and the recording worker takes them with each job. Seat zones label each
+detection with the seat; ignore zones drop people and objects there, so an invigilator at the
+front desk is not flagged.
+
+### Uploaded recordings
+
+```yaml
+recording_analysis:
+  analysis_fps: 10     # frames analysed per second of video; the rest are skipped
+  poll_seconds: 10     # how often the worker asks the API for a queued recording
+```
+
+Rules are timed in video time, so a 1-second confirmation means 1 second of footage however fast
+the worker runs. Lowering `analysis_fps` speeds up analysis; below about 5 brief phone use can be
+missed.
+
 ### Models
 
 | Key | Default | Description |
@@ -159,8 +183,10 @@ More detail on the pipeline and thresholds: [ai/README.md](../ai/README.md).
 | `EXPO_PUBLIC_API_URL` | `https://classroomguard.college.edu/api/v1` |
 | `EXPO_PUBLIC_WS_URL` | `wss://classroomguard.college.edu/ws` |
 
-Push notifications additionally need an Expo (EAS) project ID in `mobile/app.json`
-(add `expo.extra.eas.projectId`).
+Push notifications additionally need the college's Expo (EAS) project ID. Create the project
+with `npx eas init` in `mobile/`, then build with `EAS_PROJECT_ID=<id>` set (read by
+`mobile/app.config.js`). Without it the app still shows alerts over the live connection, but
+sends no push notifications.
 
 ## Web app (development only)
 

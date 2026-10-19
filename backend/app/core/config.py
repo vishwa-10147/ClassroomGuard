@@ -1,4 +1,4 @@
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEV_JWT_SECRET = "classroomguard-dev-secret-change-in-prod"
@@ -49,10 +49,27 @@ class Settings(BaseSettings):
     use_redis: bool = True
     redis_url: str = "redis://localhost:6379/0"
 
+    # Private networks webhooks may deliver to (CIDRs), e.g. ["10.20.0.0/16"] for a receiver on
+    # the campus LAN. Empty: public addresses only. Loopback, link-local (cloud metadata) and
+    # multicast addresses are refused even when listed.
+    webhook_allowed_networks: list[str] = []
+
     # Observability
     enable_tracing: bool = False
     otlp_endpoint: str = "http://localhost:4317"
     sentry_dsn: str = ""
+
+    @field_validator("webhook_allowed_networks")
+    @classmethod
+    def _valid_networks(cls, value: list[str]) -> list[str]:
+        import ipaddress
+
+        for network in value:
+            try:
+                ipaddress.ip_network(network, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"WEBHOOK_ALLOWED_NETWORKS: '{network}' is not a network such as 10.0.0.0/8") from exc
+        return value
 
     @model_validator(mode="after")
     def _require_production_secrets(self) -> "Settings":

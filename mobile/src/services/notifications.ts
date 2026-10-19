@@ -29,6 +29,11 @@ export async function registerForPushNotifications(): Promise<void> {
     }
 
     const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
+    if (!projectId) {
+      // Alerts still arrive in the app over the live connection; only pushes are off
+      console.warn('Push notifications are off: build the app with EAS_PROJECT_ID set (see mobile/app.config.js)');
+      return;
+    }
     const data = await Notifications.getExpoPushTokenAsync({ projectId });
 
     await api.post('/notifications/register', {

@@ -8,7 +8,7 @@ export type RecordingStatus =
 export interface Recording {
   id: string;
 
-  name?: string;
+  name: string;
   filename: string;
 
   classroomId?: string;
@@ -19,26 +19,36 @@ export interface Recording {
 
   status: RecordingStatus;
 
-  progress?: number;
+  /** 0-100 */
+  progress: number;
 
-  startTime: string;
-  endTime: string;
+  /** Seconds (known once analysis has opened the file) */
+  duration: number;
+  /** Bytes */
+  fileSize: number;
 
-  duration: string;
-  fileSize: string;
+  /** Analysed frames in which a phone or calculator was seen */
+  detectionCount: number;
+  /** Detection events (cheating cues) found in the recording */
+  eventCount: number;
 
-  detectionCount?: number;
-  eventCount?: number;
-
-  error?: string;
-  errorMessage?: string;
+  errorMessage?: string | null;
 
   currentFrame?: number;
   totalFrames?: number;
-  phase?: string;
-  eta?: number;
+  phase?: string | null;
 
   uploadedAt?: string;
-  processedAt?: string;
+  processedAt?: string | null;
   createdAt?: string;
+}
+
+/** Live progress pushed over the WebSocket while a recording is analysed */
+export interface RecordingUpdate {
+  id: string;
+  status: RecordingStatus;
+  progress: number;
+  phase?: string | null;
+  detectionCount: number;
+  eventCount: number;
 }

@@ -118,6 +118,25 @@ async def list_incidents(
     )
 
 
+@router.get("/assignees")
+async def list_assignees(
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_permission("incidents:write")),
+):
+    """Active staff of the organisation an incident can be assigned to (no user admin rights needed)."""
+    rows = (await db.execute(
+        select(User.id, User.name, User.role)
+        .where(
+            User.organization_id == _org_id(_user),
+            User.is_active.is_(True),
+            User.status == "active",
+            User.role != "viewer",
+        )
+        .order_by(User.name)
+    )).all()
+    return [{"id": r.id, "name": r.name, "role": r.role} for r in rows]
+
+
 @router.get("/{incident_id}", response_model=IncidentResponse)
 async def get_incident(
     incident_id: str,
