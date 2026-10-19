@@ -4,6 +4,21 @@ All notable changes to ClassroomGuard are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-19
+
+### Added
+
+- `GET /api/v1/dashboard/stats` (`alerts:read`): camera, classroom and alert counts for the
+  caller's organisation.
+- Optional error tracking and tracing: the API initialises Sentry when `SENTRY_DSN` is set and
+  OpenTelemetry (OTLP export) when `ENABLE_TRACING=true`. Nothing changes when they are unset.
+
+### Fixed
+
+- Mobile Dashboard tab: it called `/api/v1/dashboard/stats`, which did not exist, so its
+  counters never loaded. The Users counter is replaced by Alerts Today, so roles without
+  `users:read` see no user counts.
+
 ## [1.0.0] - 2026-10-16
 
 First production release, intended for a supervised pilot in college exam halls.
@@ -61,4 +76,5 @@ First production release, intended for a supervised pilot in college exam halls.
 
 See [README → Known limitations](README.md#known-limitations).
 
+[1.0.1]: https://github.com/vishwa-10147/ClassroomGuard/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/vishwa-10147/ClassroomGuard/releases/tag/v1.0.0

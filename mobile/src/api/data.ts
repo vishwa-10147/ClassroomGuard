@@ -24,7 +24,6 @@ export interface DashboardStats {
   total_cameras: number;
   active_cameras: number;
   total_classrooms: number;
-  total_users: number;
   active_alerts: number;
   total_alerts_today: number;
 }
