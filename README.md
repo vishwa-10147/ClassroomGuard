@@ -1,11 +1,21 @@
-# ClassroomGuard
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="ClassroomGuard logo" width="120" height="120">
+</p>
 
-**AI-assisted exam-hall monitoring.** ClassroomGuard watches classroom CCTV cameras, detects
-students using a **mobile phone** or an unpermitted **calculator**, and alerts invigilators in
-real time with an annotated evidence frame. Staff review and act on alerts from a web dashboard
-or a mobile app.
+<h1 align="center">ClassroomGuard</h1>
 
-[![CI](https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml)
+<p align="center">
+  <strong>AI-assisted exam-hall monitoring</strong><br>
+  Detects mobile phones and unpermitted calculators on classroom CCTV and alerts invigilators in real time.
+</p>
+
+<p align="center">
+  <a href="https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml"><img src="https://github.com/vishwa-10147/ClassroomGuard/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+ClassroomGuard watches classroom CCTV cameras, detects students using a **mobile phone** or an
+unpermitted **calculator**, and alerts invigilators in real time with an annotated evidence frame.
+Staff review and act on alerts from a web dashboard or a mobile app.
 
 > **Installing it on a college server?** Follow **[SETUP.md](SETUP.md)**.
 > The operations guide for IT departments is [docs/DEPLOY_ONPREM.md](docs/DEPLOY_ONPREM.md).
