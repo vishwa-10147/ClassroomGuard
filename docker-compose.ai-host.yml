@@ -41,3 +41,35 @@ services:
       options:
         max-size: "50m"
         max-file: "3"
+
+  # Analyses uploaded recordings; downloads each video from the API when ./storage is not shared
+  ai-recordings:
+    image: classroomguard-ai:latest
+    hostname: ${AI_ENGINE_NAME:-classroomguard-ai}-recordings
+    command: ["python", "recording_worker.py", "--config", "config.yaml"]
+    depends_on: [ai]
+    environment:
+      BACKEND_URL: ${BACKEND_URL:?set BACKEND_URL to the main server, e.g. https://classroomguard.college.edu}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN (same value as the main server)}
+      REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ./ai/models:/app/models:ro
+      - ./ai/config.yaml:/app/config.yaml:ro
+      - ./deploy/certs:/certs:ro
+      - ./storage:/app/storage
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"

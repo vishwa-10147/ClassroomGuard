@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 from .tracker import Track
 
@@ -8,7 +8,9 @@ logger = logging.getLogger(__name__)
 
 
 class CheatingEngine:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, clock: Optional[Callable[[], float]] = None):
+        # Recorded footage passes the video position, so durations are measured in video time
+        self._clock = clock or (lambda: time.time())
         self.rules = config.get("cheating_rules", {})
         self.cooldown = float(config.get("alerts", {}).get("cooldown", 10.0))
         self._student_state: dict[int, dict] = {}
@@ -33,7 +35,7 @@ class CheatingEngine:
 
         state = self._student_state[track_id]
         alerts = []
-        now = time.time()
+        now = self._clock()
         phone_dets = [d for d in object_detections if d["class_name"] in ("cell_phone", "cell phone")]
         proximity = self.rules.get("phone_usage", {}).get("proximity_to_person", 150)
         near_phones = [d for d in phone_dets if self._is_near_person(track.bbox, d["bbox"], proximity)]
@@ -198,9 +200,9 @@ class CheatingEngine:
         message: str, camera_id: int, extra: dict,
     ) -> Optional[dict]:
         state = self._student_state[track_id]
-        last = state["last_alert_times"].get(alert_type, 0)
-        now = time.time()
-        if now - last < self.cooldown:
+        last = state["last_alert_times"].get(alert_type)
+        now = self._clock()
+        if last is not None and now - last < self.cooldown:
             return None
 
         state["last_alert_times"][alert_type] = now
