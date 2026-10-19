@@ -154,6 +154,11 @@ alerts:
   cooldown: 10.0                          # seconds between same alert type per student
   object_cooldown: 120.0                  # phone/calculator: one alert per student or desk every 2 minutes
 
+# === UPLOADED RECORDINGS (recording_worker.py) ===
+recording_analysis:
+  analysis_fps: 10                        # frames analysed per second of video (the rest are skipped)
+  poll_seconds: 10                        # how often to ask the API for a queued recording
+
 # === TRAINING ===
 training:
   detector_model: yolo26m.pt              # YOLO26m base — NMS-free, MuSGD optimizer

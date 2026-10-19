@@ -54,3 +54,11 @@ async def test_ai_service_can_read_a_camera(client: AsyncClient):
     assert resp.status_code == 200
     resp = await client.get(f"/api/v1/cameras/{items[0]['id']}", headers={"X-Service-Token": "wrong"})
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(not SERVICE_TOKEN, reason="TEST_AI_SERVICE_TOKEN not set")
+async def test_ai_service_can_look_up_a_camera_by_its_code(client: AsyncClient):
+    resp = await client.get("/api/v1/cameras/CAM-FRONT-L", headers={"X-Service-Token": SERVICE_TOKEN})
+    assert resp.status_code == 200
+    assert resp.json()["id"] == "cam-001"

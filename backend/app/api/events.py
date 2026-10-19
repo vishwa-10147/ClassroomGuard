@@ -5,6 +5,7 @@ from backend.app.core.websocket import manager
 from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
 from backend.app.models.detection_event import DetectionEvent
+from backend.app.models.recording import Recording
 from backend.app.schemas.event import (
     DetectionEventCreate,
     DetectionEventListResponse,
@@ -49,6 +50,17 @@ async def create_event(
             detail=f"Unknown camera '{body.camera_id}'. Add it under Cameras and use its Camera ID in the AI config.",
         )
 
+    recording = None
+    if body.recording_id:
+        recording = (await db.execute(
+            select(Recording).where(
+                Recording.id == body.recording_id,
+                Recording.organization_id == camera.organization_id,
+            )
+        )).scalar_one_or_none()
+        if recording is None:
+            raise HTTPException(status_code=422, detail="Unknown recording")
+
     event = DetectionEvent(
         event_type=body.event_type,
         severity=body.severity,
@@ -56,14 +68,22 @@ async def create_event(
         camera_id=camera.id,
         organization_id=camera.organization_id,
         seat_id=body.seat_id,
+        recording_id=recording.id if recording else None,
         confidence=body.confidence,
         tracker_id=body.tracker_id,
         bounding_box=body.bounding_box,
         metadata_json=metadata_json,
     )
     db.add(event)
+    if recording is not None:
+        recording.event_count += 1
     await db.commit()
     await db.refresh(event)
+
+    # Found in uploaded footage: stored for review, but nothing is happening in the room now,
+    # so there is no live notification or alert
+    if recording is not None:
+        return event
 
     classroom = await db.get(Classroom, camera.classroom_id)
     room = classroom.name if classroom else "unknown room"
@@ -111,6 +131,9 @@ async def list_events(
     type: str | None = Query(None),
     severity: str | None = Query(None),
     since: datetime | None = Query(None, description="Only events at or after this time (ISO 8601)"),
+    recording_id: str | None = Query(None),
+    source: str | None = Query(None, pattern="^(live|recording)$"),
+    q: str | None = Query(None, max_length=200, description="Search type, seat, camera and room"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -142,6 +165,30 @@ async def list_events(
     if since:
         base = base.where(DetectionEvent.timestamp >= since)
         count_query = count_query.where(DetectionEvent.timestamp >= since)
+    if recording_id:
+        base = base.where(DetectionEvent.recording_id == recording_id)
+        count_query = count_query.where(DetectionEvent.recording_id == recording_id)
+    if source == "live":
+        base = base.where(DetectionEvent.recording_id.is_(None))
+        count_query = count_query.where(DetectionEvent.recording_id.is_(None))
+    elif source == "recording":
+        base = base.where(DetectionEvent.recording_id.is_not(None))
+        count_query = count_query.where(DetectionEvent.recording_id.is_not(None))
+    if q:
+        pattern = f"%{q.strip()}%"
+        match = or_(
+            DetectionEvent.event_type.ilike(pattern.replace(" ", "_")),
+            DetectionEvent.seat_id.ilike(pattern),
+            Camera.name.ilike(pattern),
+            Classroom.name.ilike(pattern),
+        )
+        base = base.where(match)
+        count_query = (
+            count_query
+            .join(Classroom, DetectionEvent.classroom_id == Classroom.id, isouter=True)
+            .join(Camera, DetectionEvent.camera_id == Camera.id, isouter=True)
+            .where(match)
+        )
 
     total = await db.scalar(count_query) or 0
     query = base.order_by(desc(DetectionEvent.timestamp)).offset((page - 1) * page_size).limit(page_size)

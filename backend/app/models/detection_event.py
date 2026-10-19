@@ -47,6 +47,14 @@ class DetectionEvent(Base):
         nullable=True,
     )
 
+    # Set when the event came from analysing an uploaded recording rather than a live camera
+    recording_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("recordings.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
     confidence: Mapped[float | None] = mapped_column(
         Float,
         nullable=True,

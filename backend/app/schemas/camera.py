@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -6,6 +7,29 @@ from pydantic import BaseModel, Field, model_validator
 def _to_camel(s: str) -> str:
     parts = s.split("_")
     return parts[0] + "".join(w.capitalize() for w in parts[1:])
+
+
+class CameraZone(BaseModel):
+    """A rectangle on the camera view, in 0-1 fractions of the image width and height.
+
+    seat: detections inside it are reported with this seat label.
+    ignore: people inside it (the invigilator's desk, an aisle) are never flagged.
+    """
+    id: str = Field(min_length=1, max_length=50)
+    type: Literal["seat", "ignore"]
+    label: str = Field(default="", max_length=50)
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    w: float = Field(gt=0, le=1)
+    h: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def _inside_image(self):
+        if self.x + self.w > 1.0001 or self.y + self.h > 1.0001:
+            raise ValueError("zone must lie inside the image")
+        if self.type == "seat" and not self.label.strip():
+            raise ValueError("a seat zone needs a label")
+        return self
 
 
 class CameraCreate(BaseModel):
@@ -36,6 +60,7 @@ class CameraUpdate(BaseModel):
     ai_model: str | None = Field(default=None, max_length=120)
     inference_ms: float | None = Field(default=None, ge=0)
     last_frame_at: datetime | None = None
+    zones: list[CameraZone] | None = Field(default=None, max_length=300)
 
     model_config = {
         "alias_generator": _to_camel,
@@ -58,6 +83,7 @@ class CameraResponse(BaseModel):
     ai_model: str | None
     inference_ms: float | None
     last_frame_at: datetime | None
+    zones: list[CameraZone] | None = None
     created_at: datetime
     updated_at: datetime
 

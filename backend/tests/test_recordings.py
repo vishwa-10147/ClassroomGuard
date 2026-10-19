@@ -51,7 +51,7 @@ async def test_get_recording_not_found(client: AsyncClient):
 async def test_start_processing(client: AsyncClient):
     data = await login(client, "admin@classguard.dev", "Admin@12345")
     list_resp = await client.get(
-        "/api/v1/recordings?processingState=queued",
+        "/api/v1/recordings?processing_state=completed",
         headers=auth_header(data["access_token"]),
     )
     recordings = list_resp.json().get("data", [])
@@ -68,7 +68,7 @@ async def test_start_processing(client: AsyncClient):
 async def test_cancel_processing(client: AsyncClient):
     data = await login(client, "admin@classguard.dev", "Admin@12345")
     list_resp = await client.get(
-        "/api/v1/recordings?processingState=processing",
+        "/api/v1/recordings?processing_state=processing",
         headers=auth_header(data["access_token"]),
     )
     recordings = list_resp.json().get("data", [])

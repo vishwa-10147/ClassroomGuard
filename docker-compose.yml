@@ -174,6 +174,35 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # Analyses uploaded recordings (Recordings -> Upload Video); same image and models as "ai"
+  ai-recordings:
+    profiles: ["ai"]
+    hostname: ${AI_ENGINE_NAME:-classroomguard-ai}-recordings
+    image: ${IMAGE_PREFIX:-classroomguard}-ai:${IMAGE_TAG:-latest}
+    command: ["python", "recording_worker.py", "--config", "config.yaml"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?set AI_SERVICE_TOKEN in .env (32+ random characters)}
+    volumes:
+      - ./ai/models:/app/models:ro
+      - ./ai/config.yaml:/app/config.yaml:ro
+      - ./storage:/app/storage
+    networks: [classguard-net]
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    logging: *default-logging
+
   prometheus:
     profiles: ["monitoring"]
     image: prom/prometheus:v2.55.1

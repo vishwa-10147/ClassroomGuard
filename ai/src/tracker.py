@@ -5,7 +5,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 
@@ -84,7 +84,8 @@ class ByteTracker:
     Lost tracks are kept for max_time_lost frames before removal.
     """
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, clock: Optional[Callable[[], float]] = None):
+        self._clock = clock or (lambda: time.time())
         track_cfg = config.get("tracker", config.get("tracking", {}))
         self.track_thresh: float = track_cfg.get("track_thresh", 0.5)
         self.high_thresh: float = track_cfg.get("high_thresh", 0.6)
@@ -104,7 +105,7 @@ class ByteTracker:
 
     def update(self, detections: list[dict]) -> list[Track]:
         self._frame_count += 1
-        current_time = time.time()
+        current_time = self._clock()
 
         # Split detections by confidence
         high_dets = [d for d in detections if d["confidence"] >= self.high_thresh]

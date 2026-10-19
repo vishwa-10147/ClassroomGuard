@@ -9,14 +9,13 @@ import cv2
 import yaml
 
 from src.camera_manager import CameraManager
-from src.cheating_logic import CheatingEngine
 from src.detector import YOLODetector
 from src.gaze_estimator import GazeEstimator
-from src.false_positive_filter import FalsePositiveFilter
+from src.pipeline import CameraState, FrameAnalyzer
 from src.pose_analyzer import PoseAnalyzer
-from src.tracker import ByteTracker, Track
 from src.alert_system import AlertSystem
 from src.dashboard_server import DashboardServer
+from src.zone_sync import ZoneSync
 
 # Ensure logs directory exists before configuring file handlers
 Path("logs").mkdir(exist_ok=True)
@@ -53,10 +52,15 @@ class ClassroomGuard:
         # Tracking, false-positive filtering and rule state are per camera: track IDs and
         # pixel positions from different cameras must never be matched against each other.
         self.gaze_estimator = GazeEstimator(config)
-        self.trackers: dict[int, ByteTracker] = {}
-        self.fp_filters: dict[int, FalsePositiveFilter] = {}
-        self.cheating_engines: dict[int, CheatingEngine] = {}
+        self.analyzer = FrameAnalyzer(config, self.detector, self.pose_analyzer, self.gaze_estimator)
+        self.camera_states: dict[int, CameraState] = {}
         self.alert_system = AlertSystem(config)
+        # Seat and ignore zones drawn in the web app, refreshed in the background
+        self.zone_sync = ZoneSync(
+            self.alert_system.backend_url.rsplit("/api/", 1)[0],
+            self.alert_system.service_token,
+            self.alert_system.backend_camera_codes,
+        )
 
         # Camera manager
         self.camera_manager = CameraManager(config)
@@ -80,6 +84,8 @@ class ClassroomGuard:
             return
         logger.info("Active cameras: %s", active_cams)
 
+        self.zone_sync.start()
+
         # Start dashboard
         if self.dashboard:
             self.dashboard.start()
@@ -99,12 +105,12 @@ class ClassroomGuard:
         finally:
             self.stop()
 
-    def _camera_state(self, cam_id: int) -> tuple[ByteTracker, FalsePositiveFilter, CheatingEngine]:
-        if cam_id not in self.trackers:
-            self.trackers[cam_id] = ByteTracker(self.config)
-            self.fp_filters[cam_id] = FalsePositiveFilter(self.config)
-            self.cheating_engines[cam_id] = CheatingEngine(self.config)
-        return self.trackers[cam_id], self.fp_filters[cam_id], self.cheating_engines[cam_id]
+    def _camera_state(self, cam_id: int) -> CameraState:
+        if cam_id not in self.camera_states:
+            self.camera_states[cam_id] = self.analyzer.new_state()
+        state = self.camera_states[cam_id]
+        state.zones = self.zone_sync.get(cam_id)
+        return state
 
     def _main_loop(self, active_cams: list[int]):
         frame_count = 0
@@ -119,60 +125,10 @@ class ClassroomGuard:
                 if not ok or frame is None:
                     continue
 
-                tracker, fp_filter, cheating_engine = self._camera_state(cam_id)
-
-                # 1. Detect prohibited objects (with false-positive filtering)
-                raw_detections = self.detector.detect(frame)
-                detections = fp_filter.filter_detections(raw_detections)
-                # Objects only count once they persist across consecutive frames
-                objects = [
-                    d for d in detections
-                    if d["class_name"] != "person" and fp_filter.verify_object_detection(d)
-                ]
-
-                # 2. People come from the pose model (boxes + wrists), then ByteTrack
-                pose_analyses = self.pose_analyzer.full_analysis(frame)
-                persons = [
-                    {"bbox": p["bbox"], "confidence": p["box_conf"], "class_name": "person"}
-                    for p in pose_analyses
-                ]
-                tracked = tracker.update(persons)
-
-                # 3. Match poses to tracks and give each object to its nearest student
-                pose_by_track = {t.track_id: self._match_pose_to_track(t, pose_analyses) for t in tracked}
-                objects_by_track = CheatingEngine.assign_objects(tracked, pose_by_track, objects)
-
-                # 4. Gaze estimation + rules per student
-                annotated_for_alerts = None
-                for track in tracked:
-                    best_pose = pose_by_track[track.track_id]
-
-                    # Gaze estimation from keypoints
-                    head_direction = "forward"
-                    yaw_val = 0.0
-                    pitch_val = 0.0
-                    if best_pose and "keypoints" in best_pose:
-                        head_pose = self.gaze_estimator.estimate_head_pose(best_pose["keypoints"])
-                        head_direction = head_pose.direction
-                        yaw_val = head_pose.yaw
-                        pitch_val = head_pose.pitch
-
-                    # Update tracker with pose info
-                    tracker.update_head_direction(track.track_id, head_direction)
-                    tracker.update_posture(track.track_id,
-                                                best_pose.get("posture", {}).get("posture", "unknown")
-                                                if best_pose else "unknown")
-
-                    # 5. Evaluate cheating rules
-                    alerts = cheating_engine.evaluate(track, best_pose, objects_by_track[track.track_id], cam_id)
-
-                    # 6. Process alerts (with debounce + annotated frame for evidence)
-                    if alerts and annotated_for_alerts is None:
-                        annotated_for_alerts = self.detector.draw_detections(frame, detections)
-                        annotated_for_alerts = self.pose_analyzer.draw_pose(annotated_for_alerts, pose_analyses)
-                    for alert in alerts:
-                        if fp_filter.should_alert(track.track_id, alert["alert_type"], alert.get("object_bbox")):
-                            self.alert_system.process_alert(alert, frame, annotated_for_alerts)
+                result = self.analyzer.analyze(self._camera_state(cam_id), frame, cam_id)
+                detections, pose_analyses, tracked = result.detections, result.pose_analyses, result.tracked
+                for alert, annotated_for_alerts in result.alerts:
+                    self.alert_system.process_alert(alert, frame, annotated_for_alerts)
 
                 # 7. Draw annotations
                 annotated = self.detector.draw_detections(frame, detections)
@@ -205,7 +161,7 @@ class ClassroomGuard:
             if self.dashboard and time.time() - stats_interval > 2.0:
                 fps_data = {str(cam_id): self.camera_manager.get_fps(cam_id) for cam_id in active_cams}
                 self.dashboard.update_stats({
-                    "total_students": sum(len(t.tracks) for t in self.trackers.values()),
+                    "total_students": sum(len(st.tracker.tracks) for st in self.camera_states.values()),
                     "fps": fps_data,
                     "avg_fps": sum(fps_data.values()) / max(len(fps_data), 1),
                 })
@@ -233,32 +189,6 @@ class ClassroomGuard:
                             logger.info("Screenshot saved for camera %d", cam_id)
 
             frame_count += 1
-
-    def _match_pose_to_track(self, track: Track, pose_analyses: list[dict]) -> dict | None:
-        track_box = track.bbox
-        best_iou = 0
-        best_pose = None
-
-        for pose in pose_analyses:
-            pose_box = pose["bbox"]
-            iou = self._iou(track_box, pose_box)
-            if iou > best_iou:
-                best_iou = iou
-                best_pose = pose
-
-        return best_pose if best_iou > 0.3 else None
-
-    @staticmethod
-    def _iou(box_a, box_b) -> float:
-        x1 = max(box_a[0], box_b[0])
-        y1 = max(box_a[1], box_b[1])
-        x2 = min(box_a[2], box_b[2])
-        y2 = min(box_a[3], box_b[3])
-        inter = max(0, x2 - x1) * max(0, y2 - y1)
-        area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
-        area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
-        union = area_a + area_b - inter
-        return inter / union if union > 0 else 0
 
     def stop(self):
         self.running = False

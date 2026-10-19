@@ -4,7 +4,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,12 @@ class FrameRecord:
 class MultiFrameVerifier:
     """Requires N consecutive frames with the same detection before confirming."""
 
-    def __init__(self, min_consecutive_frames: int = 3, max_gap_seconds: float = 1.0):
+    def __init__(
+        self, min_consecutive_frames: int = 3, max_gap_seconds: float = 1.0,
+        clock: Optional[Callable[[], float]] = None,
+    ):
+        # Looked up on each call so tests can patch time.monotonic
+        self._clock = clock or (lambda: time.monotonic())
         self.min_consecutive = min_consecutive_frames
         # Records further apart than this are not "consecutive" (object left and came back)
         self.max_gap = max_gap_seconds
@@ -77,6 +82,7 @@ class MultiFrameVerifier:
             bbox=detection["bbox"],
             confidence=detection["confidence"],
             class_name=cls,
+            timestamp=self._clock(),
         )
         self._buffers[key].append(rec)
 
@@ -206,7 +212,7 @@ class AlertDebouncer:
             gx, gy = int(location[0] // self.location_grid_px), int(location[1] // self.location_grid_px)
             # neighbouring cells too, so an object near a cell border does not slip through
             keys += [("loc", alert_type, gx + dx, gy + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
-        if any(now - self._last_alerts.get(k, 0.0) < cooldown for k in keys):
+        if any(k in self._last_alerts and now - self._last_alerts[k] < cooldown for k in keys):
             return False
         self._last_alerts[keys[0]] = now
         if location is not None:
@@ -226,13 +232,15 @@ class FalsePositiveFilter:
     Call in order: calibrate -> duplicate_filter -> multi_frame_verify -> debounce.
     """
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, clock: Optional[Callable[[], float]] = None):
+        self._clock = clock or (lambda: time.time())
         fp_cfg = config.get("false_positive_filter", {})
         self.calibrator = ConfidenceCalibrator(
             min_detection_size=fp_cfg.get("min_detection_size", 30),
         )
         self.multi_frame = MultiFrameVerifier(
             min_consecutive_frames=fp_cfg.get("min_consecutive_frames", 3),
+            clock=clock,
         )
         self.duplicate_filter = DuplicateFilter()
         alert_cfg = config.get("alerts", {})
@@ -260,7 +268,7 @@ class FalsePositiveFilter:
         location = None
         if object_bbox is not None:
             location = ((object_bbox[0] + object_bbox[2]) / 2, (object_bbox[1] + object_bbox[3]) / 2)
-        return self.debouncer.should_alert(track_id, alert_type, location=location)
+        return self.debouncer.should_alert(track_id, alert_type, now=self._clock(), location=location)
 
     def reset_track(self, track_id: int):
         self.debouncer.reset(track_id)

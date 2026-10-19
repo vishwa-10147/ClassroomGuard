@@ -2,17 +2,26 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from backend.app.api.dependencies import require_permission
+from backend.app.api.dependencies import get_db, require_permission
 from backend.app.core.config import settings
 from backend.app.core.sanitization import sanitize_filename
+from backend.app.models.recording import Recording
 from backend.app.models.user import User
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, Response
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/v1/uploads", tags=["Uploads"])
 
 ALLOWED_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500 MB
+VIDEO_MEDIA_TYPES = {
+    ".mp4": "video/mp4",
+    ".avi": "video/x-msvideo",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+}
 
 
 def _upload_dir() -> Path:
@@ -60,11 +69,8 @@ def _parse_range(range_header: str, file_size: int) -> tuple[int, int]:
         raise ValueError
 
 
-@router.post("/video")
-async def upload_video(
-    file: UploadFile,
-    _user: User = Depends(require_permission("recordings:read")),
-):
+async def save_upload(file: UploadFile) -> tuple[str, int]:
+    """Stream an uploaded video to the uploads folder; returns (stored filename, size in bytes)."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
@@ -94,41 +100,27 @@ async def upload_video(
     except Exception:
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail="Failed to save file")
-
-    return {
-        "filename": safe_name,
-        "original_name": file.filename,
-        "size_bytes": written,
-        "size_mb": round(written / (1024 * 1024), 2),
-        "content_type": file.content_type,
-        "uploaded_at": datetime.now(UTC).isoformat(),
-    }
+    return safe_name, written
 
 
-@router.get("/video/{filename}")
-async def serve_video(
-    filename: str,
-    request: Request,
-    _user: User = Depends(require_permission("recordings:read")),
-):
-    upload_dir = _upload_dir()
-    file_path = _safe_upload_path(upload_dir, filename)
+def delete_upload(filename: str) -> None:
+    try:
+        _safe_upload_path(_upload_dir(), filename).unlink(missing_ok=True)
+    except (HTTPException, OSError):
+        pass
 
+
+def video_response(filename: str, request: Request, download: bool = False) -> Response:
+    """Serve an uploaded video, honouring a single HTTP Range so players can seek."""
+    file_path = _safe_upload_path(_upload_dir(), filename)
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    ext = file_path.suffix.lower()
-    media_types = {
-        ".mp4": "video/mp4",
-        ".avi": "video/x-msvideo",
-        ".mov": "video/quicktime",
-        ".mkv": "video/x-matroska",
-    }
-    content_type = media_types.get(ext, "application/octet-stream")
+    content_type = VIDEO_MEDIA_TYPES.get(file_path.suffix.lower(), "application/octet-stream")
     file_size = file_path.stat().st_size
 
     range_header = request.headers.get("range")
-    if range_header:
+    if range_header and not download:
         try:
             range_start, range_end = _parse_range(range_header, file_size)
         except ValueError:
@@ -158,30 +150,57 @@ async def serve_video(
         media_type=content_type,
         filename=filename,
         headers={"Accept-Ranges": "bytes"},
+        content_disposition_type="attachment" if download else "inline",
     )
+
+
+async def _require_own_upload(db: AsyncSession, filename: str, user: User) -> None:
+    """Uploaded videos are only served to staff of the organisation whose recording it is."""
+    owned = await db.scalar(
+        select(func.count()).select_from(Recording).where(
+            Recording.filename == filename, Recording.organization_id == user.organization_id
+        )
+    )
+    if not owned:
+        raise HTTPException(status_code=404, detail="File not found")
+
+
+@router.post("/video")
+async def upload_video(
+    file: UploadFile,
+    _user: User = Depends(require_permission("recordings:write")),
+):
+    """Store a video without creating a recording. The web app uses POST /api/v1/recordings."""
+    safe_name, written = await save_upload(file)
+    return {
+        "filename": safe_name,
+        "original_name": file.filename,
+        "size_bytes": written,
+        "size_mb": round(written / (1024 * 1024), 2),
+        "content_type": file.content_type,
+        "uploaded_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@router.get("/video/{filename}")
+async def serve_video(
+    filename: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_permission("recordings:read")),
+):
+    _safe_upload_path(_upload_dir(), filename)
+    await _require_own_upload(db, filename, _user)
+    return video_response(filename, request)
 
 
 @router.get("/{filename}")
 async def get_upload(
     filename: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_permission("recordings:read")),
 ):
-    upload_dir = _upload_dir()
-    file_path = _safe_upload_path(upload_dir, filename)
-
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    ext = file_path.suffix.lower()
-    media_types = {
-        ".mp4": "video/mp4",
-        ".avi": "video/x-msvideo",
-        ".mov": "video/quicktime",
-        ".mkv": "video/x-matroska",
-    }
-
-    return FileResponse(
-        path=str(file_path),
-        media_type=media_types.get(ext, "application/octet-stream"),
-        filename=filename,
-    )
+    _safe_upload_path(_upload_dir(), filename)
+    await _require_own_upload(db, filename, _user)
+    return video_response(filename, request, download=True)

@@ -7,6 +7,7 @@ from backend.app.models.camera import Camera
 from backend.app.models.classroom import Classroom
 from backend.app.models.detection_event import DetectionEvent
 from backend.app.models.incident import Incident
+from backend.app.models.organization import Organization
 from backend.app.models.recording import Recording
 from backend.app.models.user import User
 from sqlalchemy import select
@@ -211,6 +212,21 @@ async def seed_data():
             db.add(recording)
         await db.flush()
         print(f"  [created] {len(RECORDINGS)} recordings")
+
+        # A second college, so tests can check that one organisation never sees another's data
+        db.add(Organization(id="org-other-001", name="Other College", slug="other-college", plan="enterprise"))
+        await db.flush()
+        db.add(Incident(
+            id="inc-other-001", title="Other college incident", description="Must stay invisible",
+            severity="high", status="open", organization_id="org-other-001",
+        ))
+        db.add(Recording(
+            id="rec-other-001", name="Other college recording", filename="other-college.mp4",
+            duration=0, file_size=0, processing_state="completed", processing_progress=100,
+            current_frame=0, total_frames=0, organization_id="org-other-001",
+        ))
+        await db.flush()
+        print("  [created] isolation fixtures for a second organisation")
 
         await db.commit()
         print("\nDone. Seed data created successfully.")

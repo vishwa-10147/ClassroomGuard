@@ -161,6 +161,15 @@ def require_permission_or_service(permission: str):
     return dep
 
 
+async def require_service(request: Request) -> None:
+    """Only the AI pipeline (X-Service-Token) may call this endpoint."""
+    service_token = request.headers.get("X-Service-Token")
+    if not (service_token and settings.ai_service_token and hmac.compare_digest(
+        service_token, settings.ai_service_token
+    )):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Service token required")
+
+
 async def _load_user_permissions(user: User, db: AsyncSession) -> list[str]:
     """Load persisted custom-role permissions, with built-in roles as fallback."""
     result = await db.execute(select(Role).where(Role.name == user.role))

@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from backend.app.core.database import Base
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -69,6 +69,13 @@ class Camera(Base):
     )
 
     inference_ms: Mapped[float | None] = mapped_column(
+        nullable=True,
+    )
+
+    # Seat and ignore zones drawn on the camera view, in normalised 0-1 image coordinates:
+    # [{"id", "type": "seat" | "ignore", "label", "x", "y", "w", "h"}]
+    zones: Mapped[list | None] = mapped_column(
+        JSON,
         nullable=True,
     )
 

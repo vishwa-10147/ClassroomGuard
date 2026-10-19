@@ -4,6 +4,7 @@ import os
 import queue
 import socket
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -65,6 +66,11 @@ class AlertSystem:
         self._event_log: list[dict] = []
         self._callbacks: list = []
 
+    @property
+    def backend_camera_codes(self) -> dict[int, str]:
+        """AI camera index -> the Camera ID the web app knows it by."""
+        return {cid: ids[0] for cid, ids in self._backend_ids.items()}
+
     def register_callback(self, callback):
         self._callbacks.append(callback)
 
@@ -115,16 +121,26 @@ class AlertSystem:
             return
         cid = alert.get("camera_id", 0)
         camera_id, classroom_id = self._backend_ids.get(cid, (f"cam-{cid + 1:03d}", None))
+        metadata = {"message": alert.get("message"), "evidence_path": alert.get("evidence_path")}
+        if alert.get("video_time_s") is not None:
+            metadata["video_time_s"] = alert["video_time_s"]
         payload = {
             "eventType": str(alert.get("alert_type")).upper().replace(" ", "_"),
             "severity": str(alert.get("severity", "MEDIUM")).lower(),
-            "cameraId": camera_id,
+            "cameraId": alert.get("backend_camera_id") or camera_id,
             "trackerId": alert.get("track_id"),
             "confidence": alert.get("confidence", 0.9),
-            "metadata": {"message": alert.get("message"), "evidence_path": alert.get("evidence_path")},
+            "metadata": metadata,
         }
         if classroom_id:
             payload["classroomId"] = classroom_id
+        if alert.get("seat_id"):
+            payload["seatId"] = alert["seat_id"]
+        if alert.get("object_bbox"):
+            x1, y1, x2, y2 = alert["object_bbox"]
+            payload["boundingBox"] = {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1}
+        if alert.get("recording_id"):
+            payload["recordingId"] = alert["recording_id"]
         try:
             self._push_queue.put_nowait((self.backend_url, payload))
         except queue.Full:
@@ -154,6 +170,14 @@ class AlertSystem:
         except queue.Full:
             pass
 
+    def flush(self, timeout: float = 60.0) -> None:
+        """Wait until queued detections have been sent (used before a recording is marked done)."""
+        if not self.service_token:
+            return
+        deadline = time.monotonic() + timeout
+        while self._push_queue.unfinished_tasks and time.monotonic() < deadline:
+            time.sleep(0.1)
+
     def _push_worker(self):
         headers = {"X-Service-Token": self.service_token}
         while True:
@@ -164,6 +188,8 @@ class AlertSystem:
                     logger.error("Backend rejected %s: %s %s", url.rsplit("/", 1)[-1], resp.status_code, resp.text)
             except Exception as e:
                 logger.error("Exception pushing to backend: %s", e)
+            finally:
+                self._push_queue.task_done()
 
     def _write_log(self, alert: dict):
         try:

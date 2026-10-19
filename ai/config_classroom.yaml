@@ -78,3 +78,8 @@ dashboard:
   enabled: true
   port: 8080
   host: "0.0.0.0"
+
+# === UPLOADED RECORDINGS (recording_worker.py) ===
+recording_analysis:
+  analysis_fps: 10                        # frames analysed per second of video (the rest are skipped)
+  poll_seconds: 10                        # how often to ask the API for a queued recording

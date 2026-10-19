@@ -18,7 +18,7 @@ from backend.app.schemas.camera import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -60,6 +60,9 @@ async def get_camera(
     query = select(Camera).where(Camera.id == camera_id)
     if current_user is not None:  # None = AI service token
         query = query.where(Camera.organization_id == current_user.organization_id)
+    else:
+        # The AI config names cameras by the Camera ID staff typed in the web app
+        query = select(Camera).where(or_(Camera.id == camera_id, Camera.camera_id == camera_id))
     result = await db.execute(query)
 
     camera = result.scalar_one_or_none()
@@ -192,6 +195,12 @@ async def update_camera(
         )
 
     updates = camera_data.model_dump(exclude_unset=True)
+    if "zones" in updates:
+        labels = [z["label"].strip().lower() for z in updates["zones"] or [] if z["type"] == "seat"]
+        if len(labels) != len(set(labels)):
+            raise HTTPException(status_code=422, detail="Seat labels must be unique on a camera")
+        if len({z["id"] for z in updates["zones"] or []}) != len(updates["zones"] or []):
+            raise HTTPException(status_code=422, detail="Zone ids must be unique")
 
     if "classroom_id" in updates:
         classroom_result = await db.execute(
@@ -209,7 +218,10 @@ async def update_camera(
                 detail="Classroom not found",
             )
 
-    old_data = {"name": camera.name, "status": camera.status, "stream_url": camera.stream_url}
+    old_data = {
+        "name": camera.name, "status": camera.status, "stream_url": camera.stream_url,
+        "zones": len(camera.zones or []),
+    }
 
     for key, value in updates.items():
         setattr(camera, key, value)
