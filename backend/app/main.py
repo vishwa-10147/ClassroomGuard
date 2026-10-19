@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     try:
         await init_db()
+        # Stored system roles must grant what this release's code checks for
+        from backend.app.api.roles import ensure_default_roles
+        from backend.app.core.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            await ensure_default_roles(db)
     except Exception as e:
         logger.exception("Could not initialize the database")
         if _is_production:

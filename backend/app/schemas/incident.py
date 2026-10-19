@@ -1,7 +1,10 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+IncidentSeverity = Literal["critical", "high", "medium", "low", "info"]
+IncidentStatus = Literal["open", "investigating", "resolved", "dismissed"]
 
 
 def _to_camel(s: str) -> str:
@@ -10,13 +13,15 @@ def _to_camel(s: str) -> str:
 
 
 class IncidentCreate(BaseModel):
-    title: str
-    description: str
-    severity: str = "medium"
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(max_length=2000)
+    severity: IncidentSeverity = "medium"
     classroom_id: str | None = None
     camera_id: str | None = None
     assigned_to: str | None = None
-    event_ids: Any | None = None
+    event_ids: list[str] | None = None
+    # Escalating an alert: room, camera and detection event are copied from it
+    alert_id: str | None = None
 
     model_config = {
         "alias_generator": _to_camel,
@@ -25,17 +30,20 @@ class IncidentCreate(BaseModel):
 
 
 class IncidentUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
-    severity: str | None = None
-    status: str | None = None
+    title: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=2000)
+    severity: IncidentSeverity | None = None
+    status: IncidentStatus | None = None
     assigned_to: str | None = None
-    notes: Any | None = None
 
     model_config = {
         "alias_generator": _to_camel,
         "populate_by_name": True,
     }
+
+
+class IncidentNoteCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class IncidentResponse(BaseModel):

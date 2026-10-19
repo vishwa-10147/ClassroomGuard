@@ -18,6 +18,7 @@ class DetectionEventResponse(BaseModel):
     camera_id: str | None = None
     camera_name: str | None = None
     seat_id: str | None = None
+    recording_id: str | None = None
     confidence: float | None = None
     tracker_id: int | None = None
     frame_url: str | None = None
@@ -39,7 +40,8 @@ class DetectionEventCreate(BaseModel):
     # Optional: derived from the camera
     classroom_id: str | None = Field(default=None, validation_alias="classroomId")
     camera_id: str = Field(validation_alias="cameraId")
-    seat_id: str | None = Field(default=None, validation_alias="seatId")
+    seat_id: str | None = Field(default=None, validation_alias="seatId", max_length=50)
+    recording_id: str | None = Field(default=None, validation_alias="recordingId")
     confidence: float | None = None
     tracker_id: int | None = Field(default=None, validation_alias="trackerId")
     bounding_box: Any | None = Field(default=None, validation_alias="boundingBox")

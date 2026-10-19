@@ -42,6 +42,7 @@ PERMISSION_GROUPS: list[dict] = [
     ]},
     {"category": "Recordings", "permissions": [
         {"id": "recordings:read", "label": "View recordings and evidence"},
+        {"id": "recordings:write", "label": "Upload recordings and run analysis"},
         {"id": "recordings:delete", "label": "Delete recordings"},
     ]},
     {"category": "Reports & Search", "permissions": [
@@ -70,7 +71,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "classrooms:read", "classrooms:write",
         "alerts:read", "alerts:write", "alerts:manage",
         "incidents:read", "incidents:write",
-        "recordings:read", "recordings:delete",
+        "recordings:read", "recordings:write", "recordings:delete",
         "events:read",
         "reports:read", "reports:write",
         "search:read",
@@ -94,7 +95,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "classrooms:read",
         "alerts:read", "alerts:write", "alerts:manage",
         "incidents:read", "incidents:write",
-        "recordings:read",
+        "recordings:read", "recordings:write",
         "events:read",
         "reports:read",
         "search:read",
