@@ -1,4 +1,5 @@
 import { Bell, Check, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/utils/cn';
 import { useNotificationStore } from '@/stores/notificationStore';
 import type { Notification } from '@/stores/notificationStore';
@@ -20,8 +21,16 @@ function timeAgo(ts: number): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function NotificationPanel() {
+/** Notifications are live alerts; "View all" opens the Alerts page. */
+export function NotificationPanel({ onNavigate }: { onNavigate?: () => void }) {
   const { notifications, markAsRead, clearAll } = useNotificationStore();
+  const navigate = useNavigate();
+
+  const viewAll = () => {
+    markAsRead();
+    onNavigate?.();
+    navigate('/alerts');
+  };
 
   if (notifications.length === 0) {
     return (
@@ -90,8 +99,11 @@ export function NotificationPanel() {
 
       {/* Footer */}
       <div className="border-t border-cg-border-default px-4 py-2">
-        <button className="w-full text-center text-xs font-medium text-cg-brand hover:text-cg-brand-hover">
-          View all notifications
+        <button
+          onClick={viewAll}
+          className="w-full text-center text-xs font-medium text-cg-brand hover:text-cg-brand-hover"
+        >
+          View all alerts
         </button>
       </div>
     </div>

@@ -33,5 +33,6 @@ export const PERMISSIONS = {
   VIEW_REPORTS: 'view_reports',
   MANAGE_USERS: 'manage_users',
   MANAGE_RECORDINGS: 'manage_recordings',
+  DELETE_RECORDINGS: 'delete_recordings',
   MANAGE_SETTINGS: 'manage_settings',
 } as const;

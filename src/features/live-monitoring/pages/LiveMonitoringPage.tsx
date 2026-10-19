@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Camera, LayoutGrid, Maximize, Settings2, AlertTriangle,
-  Users, Smartphone, Clock, Filter, Activity, Loader2, WifiOff,
+  Users, Smartphone, Clock, Filter, Activity, Loader2, WifiOff, Grid2x2,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { cameraService } from '@/services/api/cameraService';
@@ -321,9 +322,24 @@ export default function LiveMonitoringPage() {
               <h3 className="text-lg font-semibold text-cg-text-primary mb-4 border-b border-cg-border-default pb-2 flex items-center justify-between">
                 Camera Info
                 {canManageCameras && (
-                  <button className="p-1 rounded text-cg-text-tertiary hover:bg-cg-bg-tertiary" aria-label="Camera settings">
-                    <Settings2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <Link
+                      to={`/cameras?zones=${selectedCamera?.id ?? ''}`}
+                      className="p-1 rounded text-cg-text-tertiary hover:bg-cg-bg-tertiary"
+                      aria-label="Seats and zones"
+                      title="Seats & zones"
+                    >
+                      <Grid2x2 className="w-4 h-4" />
+                    </Link>
+                    <Link
+                      to={`/cameras?edit=${selectedCamera?.id ?? ''}`}
+                      className="p-1 rounded text-cg-text-tertiary hover:bg-cg-bg-tertiary"
+                      aria-label="Camera settings"
+                      title="Camera settings"
+                    >
+                      <Settings2 className="w-4 h-4" />
+                    </Link>
+                  </div>
                 )}
               </h3>
               <div className="space-y-3 text-sm" aria-live="polite">

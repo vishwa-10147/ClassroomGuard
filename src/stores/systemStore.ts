@@ -51,8 +51,9 @@ export const useSystemStore = create<SystemState>((set) => ({
       const [camerasRes, alertCountRes, eventsRes, phonesRes] = await Promise.all([
         apiClient.get('/cameras'),
         apiClient.get('/alerts/count'),
-        apiClient.get('/events', { params: { page: 1, page_size: 1, since } }),
-        apiClient.get('/events', { params: { page: 1, page_size: 1, since, type: 'PHONE_USAGE' } }),
+        // Live cameras only: analysing old footage today must not inflate today's figures
+        apiClient.get('/events', { params: { page: 1, page_size: 1, since, source: 'live' } }),
+        apiClient.get('/events', { params: { page: 1, page_size: 1, since, type: 'PHONE_USAGE', source: 'live' } }),
       ]);
 
       const cameras = camerasRes.data;

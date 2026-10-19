@@ -2,12 +2,16 @@ import { apiClient } from './client';
 import type { DetectionEvent, EventType, Severity } from '@/types/event.types';
 
 export interface EventFilters {
-  dateFrom?: string;
-  dateTo?: string;
+  since?: string;
   classroomId?: string;
   cameraId?: string;
-  type?: EventType;
+  type?: EventType | string;
   severity?: Severity;
+  /** live cameras only, or uploaded recordings only */
+  source?: 'live' | 'recording';
+  recordingId?: string;
+  /** Search type, seat, camera and room */
+  q?: string;
   page?: number;
   pageSize?: number;
 }
@@ -25,7 +29,16 @@ function normalizeEvents(data: EventResponseData): DetectionEvent[] {
 
 export const eventService = {
   getAll: async (filters?: EventFilters): Promise<DetectionEvent[]> => {
-    const response = await apiClient.get('/events', { params: filters });
+    const { classroomId, cameraId, recordingId, pageSize, ...rest } = filters ?? {};
+    const response = await apiClient.get('/events', {
+      params: {
+        ...rest,
+        classroom_id: classroomId,
+        camera_id: cameraId,
+        recording_id: recordingId,
+        page_size: pageSize,
+      },
+    });
     return normalizeEvents(response.data);
   },
   getById: async (id: string): Promise<DetectionEvent> => {

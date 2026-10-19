@@ -21,6 +21,8 @@ const config: Config = {
             primary: '#E8ECF2',
             secondary: '#8B95A8',
             tertiary: '#5A6478',
+            // Used across the app for de-emphasised labels; between secondary and tertiary
+            muted: '#707A8E',
             inverse: '#0A0E14',
           },
           // Borders

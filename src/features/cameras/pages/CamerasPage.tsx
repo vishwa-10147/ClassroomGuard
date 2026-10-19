@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Camera as CameraIcon,
   Plus,
@@ -12,6 +13,7 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  Grid2x2,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { cameraService } from '@/services/api/cameraService';
@@ -26,6 +28,7 @@ import { Input, Select, SearchInput } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Popover } from '@/components/ui/Popover';
+import { ZoneEditor } from '@/features/cameras/components/ZoneEditor';
 
 export default function CamerasPage() {
   const { user } = useAuthStore();
@@ -49,6 +52,8 @@ export default function CamerasPage() {
     resolution: '1920x1080',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [zoneCamera, setZoneCamera] = useState<Camera | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const loadCameras = async () => {
     try {
@@ -75,6 +80,20 @@ export default function CamerasPage() {
     loadCameras();
     loadClassrooms();
   }, []);
+
+  // Deep links from Live Monitoring: /cameras?edit=<id> or /cameras?zones=<id>
+  useEffect(() => {
+    if (isLoading || !canManageCameras) return;
+    const editId = searchParams.get('edit');
+    const zonesId = searchParams.get('zones');
+    const camera = cameras.find((c) => c.id === (editId ?? zonesId));
+    if (!camera) return;
+    if (editId) openEditModal(camera);
+    else setZoneCamera(camera);
+    searchParams.delete('edit');
+    searchParams.delete('zones');
+    setSearchParams(searchParams, { replace: true });
+  }, [isLoading, cameras, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const classroomOptions = useMemo(
     () => classrooms.map((c) => ({ value: c.id, label: c.name })),
@@ -327,6 +346,18 @@ export default function CamerasPage() {
                                 <Pencil className="w-4 h-4" /> Edit
                               </button>
                               <button
+                                onClick={() => {
+                                  setZoneCamera(camera);
+                                  setActiveDropdown(null);
+                                }}
+                                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-cg-text-primary hover:bg-cg-bg-tertiary"
+                              >
+                                <Grid2x2 className="w-4 h-4" /> Seats & zones
+                                {camera.zones && camera.zones.length > 0 && (
+                                  <span className="ml-auto text-xs text-cg-text-tertiary">{camera.zones.length}</span>
+                                )}
+                              </button>
+                              <button
                                 onClick={() => handleTestConnection(camera.id)}
                                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-cg-text-primary hover:bg-cg-bg-tertiary"
                               >
@@ -377,13 +408,28 @@ export default function CamerasPage() {
                 </div>
               </div>
               <div className="border-t border-cg-border-default p-3 flex justify-end space-x-2">
-                <button
-                  type="button"
-                  className="p-1.5 text-cg-text-muted hover:text-brand-500 rounded-md hover:bg-cg-bg-tertiary transition-colors"
-                  onClick={() => openEditModal(camera)}
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
+                {canManageCameras && (
+                  <button
+                    type="button"
+                    title="Seats & zones"
+                    aria-label="Seats and zones"
+                    className="p-1.5 text-cg-text-muted hover:text-cg-brand rounded-md hover:bg-cg-bg-tertiary transition-colors"
+                    onClick={() => setZoneCamera(camera)}
+                  >
+                    <Grid2x2 className="w-4 h-4" />
+                  </button>
+                )}
+                {canManageCameras && (
+                  <button
+                    type="button"
+                    title="Edit"
+                    aria-label="Edit camera"
+                    className="p-1.5 text-cg-text-muted hover:text-cg-brand rounded-md hover:bg-cg-bg-tertiary transition-colors"
+                    onClick={() => openEditModal(camera)}
+                  >
+                    <Settings className="w-4 h-4" />
+                  </button>
+                )}
                 {canManageCameras && (
                   <button
                     type="button"
@@ -457,6 +503,14 @@ export default function CamerasPage() {
           </div>
         </div>
       </Modal>
+
+      <ZoneEditor
+        camera={zoneCamera}
+        onClose={() => setZoneCamera(null)}
+        onSaved={(updated) =>
+          setCameras((list) => list.map((c) => (c.id === updated.id ? { ...c, zones: updated.zones } : c)))
+        }
+      />
     </div>
   );
 }

@@ -140,3 +140,17 @@ async def test_incidents_of_another_organisation_are_invisible(client: AsyncClie
     assert (await client.delete(
         "/api/v1/incidents/inc-other-001", headers=auth_header(admin["access_token"])
     )).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_assignees_list_staff_without_user_admin_rights(client: AsyncClient):
+    headers = await _security(client)
+    resp = await client.get("/api/v1/incidents/assignees", headers=headers)
+    assert resp.status_code == 200
+    people = resp.json()
+    assert people and all(set(p) == {"id", "name", "role"} for p in people)
+    assert "viewer" not in {p["role"] for p in people}
+    viewer = await login(client, "viewer@classguard.dev", "Viewer@12345")
+    assert (await client.get(
+        "/api/v1/incidents/assignees", headers=auth_header(viewer["access_token"])
+    )).status_code == 403
