@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from backend.app.api.dependencies import get_db, require_permission, require_permission_or_service
 from backend.app.core.audit import log_audit
@@ -26,6 +26,19 @@ async def create_alert(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission_or_service("alerts:write")),
 ):
+    organization_id = _user.organization_id if _user is not None else None
+    if body.camera_id:
+        camera = (await db.execute(select(Camera).where(Camera.id == body.camera_id))).scalar_one_or_none()
+        if camera is None or (organization_id and camera.organization_id != organization_id):
+            raise HTTPException(status_code=404, detail="Camera not found")
+        organization_id = camera.organization_id
+    elif body.classroom_id:
+        classroom = (await db.execute(select(Classroom).where(Classroom.id == body.classroom_id))).scalar_one_or_none()
+        if classroom is None or (organization_id and classroom.organization_id != organization_id):
+            raise HTTPException(status_code=404, detail="Classroom not found")
+        organization_id = classroom.organization_id
+    if not organization_id:
+        raise HTTPException(status_code=422, detail="Alert must belong to an organization")
     return await create_alert_and_notify(
         db,
         title=body.title,
@@ -35,6 +48,7 @@ async def create_alert(
         classroom_id=body.classroom_id,
         camera_id=body.camera_id,
         event_id=body.event_id,
+        organization_id=organization_id,
     )
 
 
@@ -54,11 +68,14 @@ async def list_alerts(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("alerts:read")),
 ):
+    if not _user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
     query = (
         select(Alert, Classroom.name.label("c_name"), Camera.name.label("cam_name"))
         .join(Classroom, Alert.classroom_id == Classroom.id, isouter=True)
         .join(Camera, Alert.camera_id == Camera.id, isouter=True)
         .order_by(Alert.created_at.desc())
+        .where(Alert.organization_id == _user.organization_id)
     )
     if status:
         query = query.where(Alert.status == status)
@@ -77,9 +94,13 @@ async def alert_counts(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("alerts:read")),
 ):
-    total = await db.scalar(select(func.count()).select_from(Alert))
+    if not _user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
+    total = await db.scalar(select(func.count()).select_from(Alert).where(Alert.organization_id == _user.organization_id))
     active = await db.scalar(
-        select(func.count()).select_from(Alert).where(Alert.status == "active")
+        select(func.count()).select_from(Alert).where(
+            Alert.status == "active", Alert.organization_id == _user.organization_id
+        )
     )
     return {"total": total or 0, "active": active or 0}
 
@@ -94,7 +115,7 @@ async def get_alert(
         select(Alert, Classroom.name.label("c_name"), Camera.name.label("cam_name"))
         .join(Classroom, Alert.classroom_id == Classroom.id, isouter=True)
         .join(Camera, Alert.camera_id == Camera.id, isouter=True)
-        .where(Alert.id == alert_id)
+        .where(Alert.id == alert_id, Alert.organization_id == _user.organization_id)
     )
     result = await db.execute(query)
     row = result.first()
@@ -110,13 +131,15 @@ async def acknowledge_alert(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("alerts:manage")),
 ):
-    result = await db.execute(select(Alert).where(Alert.id == alert_id))
+    result = await db.execute(select(Alert).where(
+        Alert.id == alert_id, Alert.organization_id == _user.organization_id
+    ))
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     old_status = alert.status
     alert.status = "acknowledged"
-    alert.acknowledged_at = datetime.utcnow()
+    alert.acknowledged_at = datetime.now(UTC)
     alert.acknowledged_by = _user.id
     await log_audit(
         db, _user, "acknowledge", "alert",
@@ -137,13 +160,15 @@ async def resolve_alert(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("alerts:manage")),
 ):
-    result = await db.execute(select(Alert).where(Alert.id == alert_id))
+    result = await db.execute(select(Alert).where(
+        Alert.id == alert_id, Alert.organization_id == _user.organization_id
+    ))
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     old_status = alert.status
     alert.status = "resolved"
-    alert.resolved_at = datetime.utcnow()
+    alert.resolved_at = datetime.now(UTC)
     alert.resolved_by = _user.id
     await log_audit(
         db, _user, "resolve", "alert",
@@ -166,7 +191,7 @@ async def resolve_alert(
             "classroom_id": str(alert.classroom_id) if alert.classroom_id else None,
             "camera_id": str(alert.camera_id) if alert.camera_id else None,
             "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
-        })
+        }, organization_id=alert.organization_id)
     except Exception:
         pass
 
@@ -181,11 +206,17 @@ async def assign_alert(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("alerts:manage")),
 ):
-    result = await db.execute(select(Alert).where(Alert.id == alert_id))
+    result = await db.execute(select(Alert).where(
+        Alert.id == alert_id, Alert.organization_id == _user.organization_id
+    ))
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
-    if body.assigned_to and await db.get(User, body.assigned_to) is None:
+    if body.assigned_to and (await db.execute(select(User).where(
+        User.id == body.assigned_to,
+        User.organization_id == alert.organization_id,
+        User.is_active.is_(True),
+    ))).scalar_one_or_none() is None:
         raise HTTPException(status_code=422, detail="Assignee not found")
     old_assigned = alert.assigned_to
     alert.assigned_to = body.assigned_to

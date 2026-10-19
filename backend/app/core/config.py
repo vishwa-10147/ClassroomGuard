@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True  # port 587; set false and SMTP_SSL=true for port 465
     smtp_ssl: bool = False
 
+    # Public sign-up (creates a new organisation with an admin). Off for college installs:
+    # accounts are created by administrators.
+    allow_self_registration: bool = False
+
     # Set true for Celery workers (no connection pooling across event loops)
     db_null_pool: bool = False
 
@@ -52,11 +56,21 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_production_secrets(self) -> "Settings":
-        if self.app_env == "production":
+        self.app_env = self.app_env.lower().strip()
+        if self.app_env not in {"development", "test", "staging", "production"}:
+            raise ValueError("APP_ENV must be one of development, test, staging, or production")
+        if self.app_env in {"staging", "production"}:
             if self.jwt_secret == _DEV_JWT_SECRET or len(self.jwt_secret) < 32:
                 raise ValueError("JWT_SECRET must be set to a random value of at least 32 characters in production")
+            if len(self.ai_service_token) < 32:
+                raise ValueError("AI_SERVICE_TOKEN must be set to a random value of at least 32 characters in production")
             if self.debug:
                 raise ValueError("DEBUG must be false in production")
+            if not self.allowed_origins or any(
+                origin == "*" or origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1")
+                for origin in self.allowed_origins
+            ):
+                raise ValueError("ALLOWED_ORIGINS must contain explicit non-local origins in production")
         return self
 
     model_config = SettingsConfigDict(

@@ -18,8 +18,9 @@ class ConnectionManager:
         self._redis_subscriber_task: asyncio.Task | None = None
         self._redis_pub = None
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, organization_id: str):
         await websocket.accept()
+        websocket.state.organization_id = organization_id
         self.active_connections.append(websocket)
         await self._ensure_redis_listener()
 
@@ -27,22 +28,25 @@ class ConnectionManager:
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
 
-    async def broadcast(self, message: dict):
+    async def broadcast(self, message: dict, organization_id: str | None = None):
+        envelope = {"organization_id": organization_id, "message": message}
         # Try Redis pub/sub first for horizontal scaling
         pub = await self._get_redis_pub()
         if pub is not None:
             try:
-                await pub.publish(CHANNEL, json.dumps(message))
+                await pub.publish(CHANNEL, json.dumps(envelope))
                 return
             except Exception:
                 logger.debug("Redis PUBLISH failed, falling back to direct broadcast", exc_info=True)
 
         # Fallback: direct in-process broadcast
-        await self._direct_broadcast(message)
+        await self._direct_broadcast(message, organization_id)
 
-    async def _direct_broadcast(self, message: dict):
+    async def _direct_broadcast(self, message: dict, organization_id: str | None = None):
         dead = []
         for conn in self.active_connections:
+            if organization_id and getattr(getattr(conn, "state", None), "organization_id", None) != organization_id:
+                continue
             try:
                 await conn.send_json(message)
             except Exception:
@@ -88,10 +92,15 @@ class ConnectionManager:
                 if raw.get("type") != "message":
                     continue
                 try:
-                    data = json.loads(raw["data"])
+                    envelope = json.loads(raw["data"])
                 except (json.JSONDecodeError, TypeError):
                     continue
-                await self._direct_broadcast(data)
+                if not isinstance(envelope, dict):
+                    continue
+                await self._direct_broadcast(
+                    envelope.get("message", {}),
+                    envelope.get("organization_id"),
+                )
         except asyncio.CancelledError:
             pass
         except Exception:

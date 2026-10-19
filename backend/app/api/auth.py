@@ -25,7 +25,6 @@ from backend.app.schemas.auth import (
     ResetPasswordRequest,
     TokenResponse,
     UserResponse,
-    Verify2FARequest,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
@@ -59,6 +58,8 @@ async def register(
     body: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    if not settings.allow_self_registration:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Self-registration is disabled")
     existing = await db.execute(
         select(User).where(User.email == body.email)
     )
@@ -124,7 +125,7 @@ async def register(
     return LoginResponse(
         access_token=token,
         refresh_token=raw_refresh,
-        expires_in=900,
+        expires_in=settings.access_token_expire_minutes * 60,
         user=UserResponse.model_validate(user),
     )
 
@@ -182,7 +183,7 @@ async def login(
     return LoginResponse(
         access_token=token,
         refresh_token=raw_refresh,
-        expires_in=900,
+        expires_in=settings.access_token_expire_minutes * 60,
         user=UserResponse.model_validate(user),
     )
 
@@ -223,7 +224,7 @@ async def refresh_token(
     )
     user = user_result.scalar_one_or_none()
 
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.status != "active":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
@@ -252,7 +253,7 @@ async def refresh_token(
     return TokenResponse(
         access_token=new_access,
         refresh_token=raw_new_refresh,
-        expires_in=900,
+        expires_in=settings.access_token_expire_minutes * 60,
     )
 
 
@@ -339,26 +340,3 @@ async def reset_password(
     await log_audit(db, user, "reset_password", "auth", request=request)
     await db.commit()
     return {"message": "Password reset successfully."}
-
-
-@router.post("/verify-2fa")
-async def verify_2fa(
-    request: Request,
-    body: Verify2FARequest,
-    db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(select(User).where(User.email == body.email))
-    user = result.scalar_one_or_none()
-    if not user or not user.two_factor_enabled:
-        raise HTTPException(status_code=400, detail="Invalid request")
-    # Stub validation:
-    if body.token != "123456":
-        raise HTTPException(status_code=401, detail="Invalid 2FA token")
-    token = create_access_token(user_id=user.id, role=user.role, organization_id=user.organization_id)
-    raw_refresh, refresh_hash, expires_at = create_refresh_token(user.id)
-    refresh_record = RefreshToken(token_hash=refresh_hash, user_id=user.id, expires_at=expires_at)
-    db.add(refresh_record)
-    await log_audit(db, user, "login_2fa", "auth", request=request)
-    await db.commit()
-    from backend.app.schemas.auth import UserResponse
-    return LoginResponse(access_token=token, refresh_token=raw_refresh, expires_in=900, user=UserResponse.model_validate(user))

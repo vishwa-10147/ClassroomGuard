@@ -53,7 +53,7 @@ nvidia-smi                                   # must list the GPU
 |---|---|---|---|
 | Staff PCs / phones | Server | 443 (and 80 → redirect) | Web app and API |
 | Server | Cameras / NVR | 554 (RTSP) | Video for the AI engine |
-| Server | College mail server | 587 or 465 | Password-reset and alert emails |
+| Server | College mail server | 587 or 465 | Password-reset emails |
 | Server | Internet (install/update only) | 443 | Docker images, Python and npm packages |
 
 Create a DNS record (e.g. `classroomguard.college.edu`) pointing at the server, or use its IP.
@@ -76,7 +76,8 @@ The installer:
 
 1. checks Docker, Compose and (if present) GPU access;
 2. asks for the address users will open and writes `/opt/classroomguard/.env` with random
-   passwords and secrets (`chmod 600`);
+   passwords and secrets for PostgreSQL, Redis, sign-in tokens, the AI engine and Grafana
+   (`chmod 600`);
 3. builds and starts all services behind HTTPS and waits until the API is healthy;
 4. asks for the first **super admin** email and password (12+ characters).
 
@@ -101,7 +102,8 @@ Choose one by setting `CADDY_TLS` in `.env`, then run `sudo docker compose up -d
 
 ## 5. Email
 
-Required for "Forgot password" and alert emails. Add to `.env`, then `sudo docker compose up -d`:
+Required for "Forgot password" emails. Alerts reach staff in the web app, by push notification
+and by webhook. Add to `.env`, then `sudo docker compose up -d`:
 
 ```bash
 SMTP_HOST=smtp.college.edu        # or smtp.office365.com / smtp.gmail.com
@@ -163,7 +165,8 @@ not protect against disk failure. Restore (replaces current data, asks for confi
 sudo ./scripts/restore.sh backups/db_YYYYMMDD_HHMMSS.dump backups/storage_YYYYMMDD_HHMMSS.tar.gz
 ```
 
-Update to a new release (takes a backup first; database migrations run automatically):
+Update to a new release (takes a backup first, adds any secrets the new release requires to
+`.env`, and database migrations run automatically):
 
 ```bash
 sudo ./scripts/update.sh            # or: sudo ./scripts/update.sh v1.1.0
@@ -175,7 +178,7 @@ sudo ./scripts/update.sh            # or: sudo ./scripts/update.sh v1.1.0
 |---|---|
 | Status of all services | `sudo docker compose ps` |
 | Logs | `sudo docker compose logs -f backend` (or `ai`, `caddy`, `frontend`) |
-| Health (database, Redis) | `sudo docker compose exec backend python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/ready').read().decode())"` |
+| Health (database, Redis) | `curl -k https://localhost/healthz` (200 when PostgreSQL and Redis respond, 503 otherwise) |
 | AI engines online | `curl -k https://localhost/api/v1/status` |
 | Restart everything | `sudo docker compose restart` |
 | Stop / start | `sudo docker compose down` / `sudo docker compose up -d` |
@@ -213,6 +216,8 @@ Each engine appears in `curl -k https://<server>/api/v1/status` under `aiEngines
 - [ ] Cameras use a view-only account; the camera VLAN is not reachable from student networks
 - [ ] Nightly backups run and are copied off the server; a restore has been tested once
 - [ ] Ubuntu security updates enabled (`unattended-upgrades`)
+- [ ] `ALLOWED_ORIGINS` and `FRONTEND_URL` contain only the real HTTPS address
+- [ ] Monitoring (if enabled) stays on localhost or an administration network, with a unique `GRAFANA_ADMIN_PASSWORD`
 
 ## 11. Privacy and policy
 
@@ -227,6 +232,9 @@ ClassroomGuard processes video of students. Before going live, the college shoul
 - restrict evidence access to the roles that need it.
 
 ## 12. Troubleshooting
+
+The most common problems are below. The full list is in
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 | Symptom | Check |
 |---|---|

@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
 
       - name: Install backend deps
         run: pip install -r backend/requirements-dev.txt
@@ -27,7 +27,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install frontend deps
         run: npm ci
@@ -59,7 +59,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
 
       - name: Install deps
         run: pip install -r backend/requirements-dev.txt
@@ -76,6 +76,7 @@ jobs:
           JWT_SECRET: ci-test-secret
           USE_REDIS: "false"
           RATE_LIMIT_ENABLED: "false"
+          AI_SERVICE_TOKEN: ci-ai-service-token-0123456789abcdef
         run: |
           python -m backend.seed_users
           python -m backend.seed_data
@@ -85,6 +86,7 @@ jobs:
       - name: Run tests
         env:
           TEST_BASE_URL: http://127.0.0.1:8000
+          TEST_AI_SERVICE_TOKEN: ci-ai-service-token-0123456789abcdef
         run: cd backend && python -m pytest tests/ -v --tb=short
 
       - name: Show API log on failure
@@ -98,7 +100,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - name: Install frontend deps for testing
         run: npm ci
       - name: Run frontend tests

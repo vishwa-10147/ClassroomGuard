@@ -43,8 +43,11 @@ export function useWebSocket(onMessage: MessageHandler) {
   }, [onMessage]);
 
   useEffect(() => {
-    connect();
+    // Defer the initial connection by one task so React StrictMode's development-only
+    // mount/cleanup probe does not create and immediately close a real socket.
+    const initialConnect = setTimeout(connect, 0);
     return () => {
+      clearTimeout(initialConnect);
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };

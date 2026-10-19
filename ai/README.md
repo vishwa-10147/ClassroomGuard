@@ -78,18 +78,36 @@ when present and typically add another ~2x.
 
 ## Running
 
+Linux:
+
 ```bash
 cd ai
-py -3.12 -m venv .venv                     # Linux: python3.12 -m venv .venv
-.venv/Scripts/pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-.venv/Scripts/pip install -r requirements.txt
-.venv/Scripts/python check_gpu.py          # confirms CUDA is available
+python3.12 -m venv .venv
+.venv/bin/pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python check_gpu.py              # confirms CUDA is available
 
 # Exam mode against the API
-set BACKEND_URL=http://localhost:8000
-set AI_SERVICE_TOKEN=<same value as the API>
-.venv/Scripts/python main.py --config config_exam.yaml --no-display
+export BACKEND_URL=http://localhost:8000
+export AI_SERVICE_TOKEN=<same value as the API>
+.venv/bin/python main.py --config config_exam.yaml --no-display
 ```
+
+Windows (PowerShell):
+
+```powershell
+cd ai
+py -3.12 -m venv .venv
+.venv\Scripts\pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python check_gpu.py
+
+$env:BACKEND_URL = "http://localhost:8000"
+$env:AI_SERVICE_TOKEN = "<same value as the API>"
+.venv\Scripts\python main.py --config config_exam.yaml --no-display
+```
+
+macOS has no CUDA support; the engine falls back to the CPU, which is too slow for live cameras.
 
 Or with Docker: `docker compose --profile ai up -d ai` from the repository root.
 
@@ -136,5 +154,5 @@ The largest gain will come from footage of your own halls:
 ## Tests
 
 ```bash
-pytest ai/tests        # rules engine, object assignment, timing, alert de-duplication
+cd ai && python -m pytest tests/    # rules engine, object assignment, timing, alert de-duplication
 ```

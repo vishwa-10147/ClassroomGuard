@@ -2,6 +2,7 @@
 import httpx
 from backend.app.api.dependencies import get_current_user, get_db
 from backend.app.models.push_token import PushToken
+from backend.app.models.user import User
 from backend.app.schemas.push_token import PushTokenRegister, PushTokenResponse
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -33,6 +34,7 @@ async def send_push_notification(token: str, title: str, body: str, data: dict |
 async def register_token(
     body: PushTokenRegister,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     existing = await db.execute(
         select(PushToken).where(PushToken.token == body.token)
@@ -43,6 +45,8 @@ async def register_token(
     record = PushToken(
         token=body.token,
         platform=body.platform,
+        user_id=current_user.id,  # only signed-in staff receive alert notifications
+        organization_id=current_user.organization_id,
     )
     db.add(record)
     await db.commit()
@@ -56,7 +60,10 @@ async def list_tokens(
     _user=Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PushToken).where(PushToken.is_active)
+        select(PushToken).where(
+            PushToken.is_active,
+            PushToken.organization_id == _user.organization_id,
+        )
     )
     return result.scalars().all()
 
@@ -68,7 +75,10 @@ async def delete_token(
     _user=Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PushToken).where(PushToken.id == token_id)
+        select(PushToken).where(
+            PushToken.id == token_id,
+            PushToken.organization_id == _user.organization_id,
+        )
     )
     record = result.scalar_one_or_none()
     if not record:

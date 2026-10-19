@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import json
 from collections.abc import AsyncGenerator
 
 from backend.app.core.config import settings
@@ -8,6 +9,7 @@ from backend.app.core.database import AsyncSessionLocal
 from backend.app.core.permissions import ROLE_PERMISSIONS
 from backend.app.core.security import decode_access_token
 from backend.app.core.tenant import current_org_id
+from backend.app.models.role import Role
 from backend.app.models.user import User
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -44,14 +46,12 @@ async def get_current_user(
         payload = decode_access_token(token)
         user_id = payload.get("sub")
         token_type = payload.get("type")
-        if token_type and token_type != "access":
+        if token_type != "access":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token type",
             )
-        org_id = payload.get("organization_id")
-        if org_id:
-            current_org_id.set(org_id)
+        token_org_id = payload.get("organization_id")
     except HTTPException:
         raise
     except Exception:
@@ -70,6 +70,7 @@ async def get_current_user(
         select(User).where(
             User.id == user_id,
             User.is_active.is_(True),
+            User.status == "active",
         )
     )
 
@@ -80,6 +81,13 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
+
+    if token_org_id != user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication context is no longer valid",
+        )
+    current_org_id.set(user.organization_id)
 
     return user
 
@@ -116,8 +124,9 @@ def _get_user_permissions(user: User) -> list[str]:
 def require_permission(permission: str):
     async def dep(
         current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
     ) -> User:
-        permissions = _get_user_permissions(current_user)
+        permissions = await _load_user_permissions(current_user, db)
         if permission not in permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -143,10 +152,25 @@ def require_permission_or_service(permission: str):
         ):
             return None
         user = await get_current_user(request, credentials, db)
-        if permission not in _get_user_permissions(user):
+        if permission not in await _load_user_permissions(user, db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Insufficient permissions: {permission} required",
             )
         return user
     return dep
+
+
+async def _load_user_permissions(user: User, db: AsyncSession) -> list[str]:
+    """Load persisted custom-role permissions, with built-in roles as fallback."""
+    result = await db.execute(select(Role).where(Role.name == user.role))
+    role = result.scalar_one_or_none()
+    if role is None:
+        return _get_user_permissions(user)
+    try:
+        permissions = json.loads(role.permissions)
+    except (TypeError, json.JSONDecodeError):
+        permissions = []
+    if not isinstance(permissions, list) or not all(isinstance(item, str) for item in permissions):
+        return []
+    return permissions

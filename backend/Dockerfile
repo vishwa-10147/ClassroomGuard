@@ -27,9 +27,9 @@ USER appuser
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
 
 # Migrate first (fails the container if the schema cannot be brought up to date), then serve.
 # One worker: live alerts are pushed from in-process WebSocket connections.
 # --proxy-headers: the API sits behind nginx / an AWS load balancer.
-CMD ["sh", "-c", "python -m backend.scripts.migrate && exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"]
+CMD ["sh", "-c", "python -m backend.scripts.migrate && exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=\"${FORWARDED_ALLOW_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}\""]

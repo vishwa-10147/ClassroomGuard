@@ -9,7 +9,6 @@ import {
   Save,
   Loader2,
   CheckCircle,
-  Key,
   Link2,
   Trash2,
   Plus,
@@ -18,8 +17,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
-import { Input, Select, Toggle } from '@/components/ui/Input';
-import { Badge, StatusIndicator } from '@/components/ui/Badge';
+import { Input } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
 import { settingsService, SystemSettings } from '@/services/api/settingsService';
 import { webhookService, Webhook } from '@/services/api/webhookService';
 import { apiClient } from '@/services/api/client';
@@ -41,6 +40,13 @@ const AVAILABLE_EVENTS = [
 
 type IntegrationType = 'slack' | 'email' | 'teams' | 'custom';
 
+interface AiEngine {
+  engine: string;
+  seconds_ago: number;
+  cameras: number;
+  fps: number;
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState<SystemSettings>({
@@ -60,7 +66,8 @@ export default function SettingsPage() {
     aiDetail: string | null;
     storagePercent: number | null;
     storageFreeGb: number | null;
-  }>({ aiOnline: null, aiDetail: null, storagePercent: null, storageFreeGb: null });
+    engines: AiEngine[];
+  }>({ aiOnline: null, aiDetail: null, storagePercent: null, storageFreeGb: null, engines: [] });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -82,8 +89,7 @@ export default function SettingsPage() {
 
     // Live system figures (no placeholder values)
     Promise.allSettled([apiClient.get('/status'), apiClient.get('/system/health')]).then(([status, sys]) => {
-      const engines: { engine: string; seconds_ago: number; cameras: number; fps: number }[] =
-        status.status === 'fulfilled' ? status.value.data.aiEngines ?? [] : [];
+      const engines: AiEngine[] = status.status === 'fulfilled' ? status.value.data.aiEngines ?? [] : [];
       const live = engines.filter((e) => e.seconds_ago <= 90);
       const storage = sys.status === 'fulfilled' ? sys.value.data.storage : null;
       setHealth({
@@ -93,6 +99,7 @@ export default function SettingsPage() {
           : 'No AI engine has reported in the last 90 seconds',
         storagePercent: storage?.percent_used ?? null,
         storageFreeGb: storage?.free_gb ?? null,
+        engines,
       });
     });
   }, []);
@@ -284,209 +291,83 @@ export default function SettingsPage() {
           {activeTab === 'ai' && (
             <div className="bg-cg-bg-secondary rounded-lg border border-cg-border-default p-6 space-y-6">
               <h2 className="text-lg font-semibold text-cg-text-primary border-b border-cg-border-default pb-3">
-                AI Engine Configuration
+                AI Engines
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-cg-bg-tertiary p-4 rounded-lg border border-cg-border-default">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Brain className="w-6 h-6 text-brand-500" />
-                    <div>
-                      <h3 className="font-medium text-cg-text-primary">Active Model</h3>
-                      <p className="text-xs text-cg-text-secondary">Computer Vision Engine</p>
+              {health.engines.length === 0 ? (
+                <p className="text-sm text-cg-text-secondary">
+                  No AI engine has reported yet. Engines report every 30 seconds once they are running.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {health.engines.map((e) => (
+                    <div key={e.engine} className="bg-cg-bg-tertiary p-4 rounded-lg border border-cg-border-default">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Brain className="w-6 h-6 text-brand-500" />
+                        <div>
+                          <h3 className="font-medium text-cg-text-primary">{e.engine}</h3>
+                          <p className="text-xs text-cg-text-secondary">
+                            {e.seconds_ago <= 90 ? 'Online' : 'Offline'} · last report {Math.round(e.seconds_ago)} s ago
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-cg-text-secondary">Cameras</span>
+                          <span className="font-mono text-cg-text-primary">{e.cameras}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-cg-text-secondary">Processing rate</span>
+                          <span className="font-mono text-cg-text-primary">{e.fps.toFixed(1)} FPS</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-cg-text-secondary">Model</span>
-                      <span className="font-mono text-cg-text-primary">YOLOv8m</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-cg-text-secondary">Precision</span>
-                      <span className="font-mono text-cg-text-primary">TensorRT FP16</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-cg-text-secondary">Status</span>
-                      <StatusIndicator status="online" />
-                    </div>
-                  </div>
+                  ))}
                 </div>
+              )}
 
-                <div className="bg-cg-bg-tertiary p-4 rounded-lg border border-cg-border-default">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Cpu className="w-6 h-6 text-brand-500" />
-                    <div>
-                      <h3 className="font-medium text-cg-text-primary">Device Info</h3>
-                      <p className="text-xs text-cg-text-secondary">Inference Hardware</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-cg-text-secondary">GPU</span>
-                      <span className="font-mono text-cg-text-primary">NVIDIA RTX 3090</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-cg-text-secondary">VRAM</span>
-                      <span className="font-mono text-cg-text-primary">24 GB</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-cg-text-secondary">Avg Latency</span>
-                      <span className="font-mono text-cg-text-primary">12ms</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-xs font-medium text-cg-text-secondary">
-                  Confidence Threshold: {Math.round(settings.aiConfidenceThreshold * 100)}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={Math.round(settings.aiConfidenceThreshold * 100)}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      aiConfidenceThreshold: parseInt(e.target.value) / 100,
-                    })
-                  }
-                  className="w-full max-w-md accent-brand-500"
-                />
-                <div className="flex justify-between text-xs text-cg-text-muted max-w-md">
-                  <span>Low (more detections)</span>
-                  <span>High (fewer false positives)</span>
-                </div>
-              </div>
-
-              <Button onClick={handleSave} loading={saving} icon={<Save className="w-4 h-4" />}>
-                Save Changes
-              </Button>
+              <p className="text-xs text-cg-text-secondary">
+                Detection thresholds and exam rules (for example whether calculators are allowed) are set in{' '}
+                <span className="font-mono">ai/config.yaml</span> on the AI machine and apply when the AI engine
+                restarts.
+              </p>
             </div>
           )}
 
           {activeTab === 'notifications' && (
-            <div className="bg-cg-bg-secondary rounded-lg border border-cg-border-default p-6 space-y-6">
+            <div className="bg-cg-bg-secondary rounded-lg border border-cg-border-default p-6 space-y-4">
               <h2 className="text-lg font-semibold text-cg-text-primary border-b border-cg-border-default pb-3">
-                Notification Preferences
+                How alerts are delivered
               </h2>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <h3 className="text-sm font-medium text-cg-text-primary">Email Alerts</h3>
-                    <p className="text-xs text-cg-text-secondary">Receive alerts via email</p>
-                  </div>
-                  <Toggle
-                    checked={settings.emailAlerts}
-                    onChange={(checked) =>
-                      setSettings({ ...settings, emailAlerts: checked })
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between py-2 border-t border-cg-border-default">
-                  <div>
-                    <h3 className="text-sm font-medium text-cg-text-primary">Push Notifications</h3>
-                    <p className="text-xs text-cg-text-secondary">Browser push notifications for real-time alerts</p>
-                  </div>
-                  <Toggle
-                    checked={settings.pushNotifications}
-                    onChange={(checked) =>
-                      setSettings({ ...settings, pushNotifications: checked })
-                    }
-                  />
-                </div>
-
-                <div className="py-2 border-t border-cg-border-default">
-                  <Select
-                    label="Alert Frequency"
-                    value={settings.alertFrequency}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        alertFrequency: e.target.value as SystemSettings['alertFrequency'],
-                      })
-                    }
-                    options={[
-                      { value: 'immediate', label: 'Immediate' },
-                      { value: 'hourly', label: 'Hourly Digest' },
-                      { value: 'daily', label: 'Daily Digest' },
-                    ]}
-                  />
-                </div>
-              </div>
-
-              <Button onClick={handleSave} loading={saving} icon={<Save className="w-4 h-4" />}>
-                Save Changes
-              </Button>
+              <ul className="space-y-3 text-sm">
+                <li>
+                  <span className="font-medium text-cg-text-primary">In the web app</span>
+                  <span className="text-cg-text-secondary"> – every signed-in user sees new alerts instantly.</span>
+                </li>
+                <li>
+                  <span className="font-medium text-cg-text-primary">Mobile app</span>
+                  <span className="text-cg-text-secondary"> – push notifications for staff signed in on the mobile app.</span>
+                </li>
+                <li>
+                  <span className="font-medium text-cg-text-primary">Webhooks</span>
+                  <span className="text-cg-text-secondary"> – Slack, Microsoft Teams or custom endpoints, configured on the Integrations tab.</span>
+                </li>
+              </ul>
             </div>
           )}
 
           {activeTab === 'security' && (
-            <div className="bg-cg-bg-secondary rounded-lg border border-cg-border-default p-6 space-y-6">
+            <div className="bg-cg-bg-secondary rounded-lg border border-cg-border-default p-6 space-y-4">
               <h2 className="text-lg font-semibold text-cg-text-primary border-b border-cg-border-default pb-3">
-                Security Settings
+                Security
               </h2>
-
-              <div className="space-y-4">
-                <div className="py-2">
-                  <Select
-                    label="Password Policy"
-                    value={settings.passwordPolicy}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        passwordPolicy: e.target.value as SystemSettings['passwordPolicy'],
-                      })
-                    }
-                    options={[
-                      { value: 'weak', label: 'Weak (8+ chars)' },
-                      { value: 'moderate', label: 'Moderate (8+ chars, mixed case & numbers)' },
-                      { value: 'strong', label: 'Strong (12+ chars, mixed case, numbers & symbols)' },
-                    ]}
-                  />
-                </div>
-
-                <div className="py-2 border-t border-cg-border-default">
-                  <Input
-                    label="Session Timeout (minutes)"
-                    type="number"
-                    value={settings.sessionTimeoutMinutes}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        sessionTimeoutMinutes: parseInt(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between py-2 border-t border-cg-border-default">
-                  <div className="flex items-center gap-3">
-                    <Key className="w-5 h-5 text-brand-500" />
-                    <div>
-                      <h3 className="text-sm font-medium text-cg-text-primary">
-                        Two-Factor Authentication
-                      </h3>
-                      <p className="text-xs text-cg-text-secondary">
-                        Require 2FA for all admin accounts
-                      </p>
-                    </div>
-                  </div>
-                  <Toggle
-                    checked={settings.twoFactorEnabled}
-                    onChange={(checked) =>
-                      setSettings({ ...settings, twoFactorEnabled: checked })
-                    }
-                  />
-                </div>
-              </div>
-
-              <Button onClick={handleSave} loading={saving} icon={<Save className="w-4 h-4" />}>
-                Save Changes
-              </Button>
+              <ul className="space-y-3 text-sm text-cg-text-secondary">
+                <li>Passwords must be at least 8 characters.</li>
+                <li>Sign-in and password reset are limited to 5 attempts per minute from each client address.</li>
+                <li>Sessions renew automatically while in use; refresh tokens expire after 7 days or on sign-out.</li>
+                <li>Accounts are created by administrators on the Users page; public sign-up is disabled.</li>
+                <li>Every change made by staff is recorded in the Audit Log.</li>
+              </ul>
             </div>
           )}
 

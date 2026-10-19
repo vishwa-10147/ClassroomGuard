@@ -30,6 +30,15 @@ def _guard_user_change(actor: User, new_role: str | None = None, target: User | 
         raise HTTPException(status_code=403, detail="Only a super admin can manage super admin accounts")
 
 
+def _user_scope(actor: User) -> tuple:
+    """Return the tenant predicate; only an explicit super admin is global."""
+    if actor.role == "super_admin":
+        return ()
+    if not actor.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
+    return (User.organization_id == actor.organization_id,)
+
+
 @router.get(
     "",
     response_model=list[UserResponse],
@@ -39,7 +48,7 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(User).order_by(User.created_at.desc())
+        select(User).where(*_user_scope(current_user)).order_by(User.created_at.desc())
     )
 
     return result.scalars().all()
@@ -55,7 +64,7 @@ async def get_user(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(User.id == user_id, *_user_scope(current_user))
     )
 
     user = result.scalar_one_or_none()
@@ -82,7 +91,7 @@ async def create_user(
 ):
     _guard_user_change(current_user, new_role=user_data.role)
     existing = await db.execute(
-        select(User).where(User.email == user_data.email)
+        select(User).where(User.email == user_data.email, *_user_scope(current_user))
     )
 
     if existing.scalar_one_or_none():
@@ -99,6 +108,7 @@ async def create_user(
         role=user_data.role,
         status=user_data.status,
         is_active=user_data.status == "active",
+        organization_id=current_user.organization_id,
     )
 
     db.add(user)
@@ -126,7 +136,7 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(User.id == user_id, *_user_scope(current_user))
     )
 
     user = result.scalar_one_or_none()
@@ -145,6 +155,7 @@ async def update_user(
             select(User).where(
                 User.email == updates["email"],
                 User.id != user_id,
+                *_user_scope(current_user),
             )
         )
 
@@ -187,7 +198,7 @@ async def put_user(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(User.id == user_id, *_user_scope(current_user))
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -197,7 +208,9 @@ async def put_user(
     _guard_user_change(current_user, new_role=updates.get("role"), target=user)
     if "email" in updates:
         existing = await db.execute(
-            select(User).where(User.email == updates["email"], User.id != user_id)
+            select(User).where(
+                User.email == updates["email"], User.id != user_id, *_user_scope(current_user)
+            )
         )
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="A user with this email already exists")
@@ -235,7 +248,7 @@ async def disable_user(
         raise HTTPException(status_code=400, detail="You cannot disable your own account")
 
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(User.id == user_id, *_user_scope(current_user))
     )
     user = result.scalar_one_or_none()
     if user is None:
@@ -274,7 +287,7 @@ async def delete_user(
         )
 
     result = await db.execute(
-        select(User).where(User.id == user_id)
+        select(User).where(User.id == user_id, *_user_scope(current_user))
     )
 
     user = result.scalar_one_or_none()

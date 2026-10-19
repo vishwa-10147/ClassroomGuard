@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Stage 1: Build
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
@@ -25,4 +25,3 @@ EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["wget", "--spider", "-q", "http://127.0.0.1/healthz"]
-

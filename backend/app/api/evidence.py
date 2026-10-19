@@ -4,7 +4,7 @@ from pathlib import Path
 from backend.app.api.dependencies import require_permission
 from backend.app.core.config import settings
 from backend.app.models.user import User
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/api/v1/evidence", tags=["Evidence"])
@@ -24,6 +24,20 @@ def _evidence_dir() -> Path:
     d = base / "evidence"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def _safe_evidence_path(directory: Path, filename: str) -> Path:
+    if not filename or Path(filename).name != filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename")
+    try:
+        base = directory.resolve()
+        candidate = (base / filename).resolve()
+        candidate.relative_to(base)
+    except (OSError, ValueError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename")
+    if candidate.suffix.lower() not in IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported image type")
+    return candidate
 
 
 def _scan_directory(directory: Path, source: str) -> list[dict]:
@@ -68,9 +82,9 @@ async def serve_frame(
     frames_dir = _frames_dir()
     evidence_dir = _evidence_dir()
 
-    file_path = frames_dir / filename
+    file_path = _safe_evidence_path(frames_dir, filename)
     if not file_path.exists() or not file_path.is_file():
-        file_path = evidence_dir / filename
+        file_path = _safe_evidence_path(evidence_dir, filename)
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Frame not found")
 

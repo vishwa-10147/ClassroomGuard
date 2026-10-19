@@ -2,7 +2,7 @@ from backend.app.api.dependencies import _get_user_permissions, get_db, require_
 from backend.app.models.alert import Alert
 from backend.app.models.classroom import Classroom
 from backend.app.models.user import User
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,20 +14,31 @@ async def global_search(
     db: AsyncSession = Depends(get_db),
     _user=Depends(require_permission("search:read")),
 ):
+    if not _user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
     # Search users (students/teachers) - only for roles allowed to see users
     users: list[dict] = []
     if "users:read" in _get_user_permissions(_user):
-        user_query = select(User).where(or_(User.name.ilike(f"%{q}%"), User.email.ilike(f"%{q}%"))).limit(10)
+        user_query = select(User).where(
+            User.organization_id == _user.organization_id,
+            or_(User.name.ilike(f"%{q}%"), User.email.ilike(f"%{q}%")),
+        ).limit(10)
         users_result = await db.execute(user_query)
         users = [{"id": u.id, "name": u.name, "type": "user"} for u in users_result.scalars().all()]
 
     # Search classrooms
-    class_query = select(Classroom).where(Classroom.name.ilike(f"%{q}%")).limit(10)
+    class_query = select(Classroom).where(
+        Classroom.organization_id == _user.organization_id,
+        Classroom.name.ilike(f"%{q}%"),
+    ).limit(10)
     class_result = await db.execute(class_query)
     classrooms = [{"id": c.id, "name": c.name, "type": "classroom"} for c in class_result.scalars().all()]
 
     # Search alerts
-    alert_query = select(Alert).where(Alert.title.ilike(f"%{q}%")).limit(10)
+    alert_query = select(Alert).where(
+        Alert.organization_id == _user.organization_id,
+        Alert.title.ilike(f"%{q}%"),
+    ).limit(10)
     alert_result = await db.execute(alert_query)
     alerts = [{"id": a.id, "name": a.title, "type": "alert"} for a in alert_result.scalars().all()]
 

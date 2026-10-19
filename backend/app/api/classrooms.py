@@ -29,8 +29,12 @@ async def list_classrooms(
     ),
     db: AsyncSession = Depends(get_db),
 ):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
     result = await db.execute(
-        select(Classroom).order_by(Classroom.name)
+        select(Classroom)
+        .where(Classroom.organization_id == current_user.organization_id)
+        .order_by(Classroom.name)
     )
 
     return result.scalars().all()
@@ -49,7 +53,8 @@ async def get_classroom(
 ):
     result = await db.execute(
         select(Classroom).where(
-            Classroom.id == classroom_id
+            Classroom.id == classroom_id,
+            Classroom.organization_id == current_user.organization_id,
         )
     )
 
@@ -77,6 +82,8 @@ async def create_classroom(
     ),
     db: AsyncSession = Depends(get_db),
 ):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=403, detail="User is not associated with an organization")
     classroom = Classroom(
         id=str(uuid4()),
         name=classroom_data.name,
@@ -84,6 +91,7 @@ async def create_classroom(
         floor=classroom_data.floor,
         room_number=classroom_data.room_number,
         total_seats=classroom_data.total_seats,
+        organization_id=current_user.organization_id,
     )
 
     db.add(classroom)
@@ -113,7 +121,8 @@ async def update_classroom(
 ):
     result = await db.execute(
         select(Classroom).where(
-            Classroom.id == classroom_id
+            Classroom.id == classroom_id,
+            Classroom.organization_id == current_user.organization_id,
         )
     )
 
@@ -155,7 +164,10 @@ async def get_classroom_layout(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Classroom).where(Classroom.id == classroom_id)
+        select(Classroom).where(
+            Classroom.id == classroom_id,
+            Classroom.organization_id == current_user.organization_id,
+        )
     )
     classroom = result.scalar_one_or_none()
     if classroom is None:
@@ -203,7 +215,8 @@ async def delete_classroom(
 ):
     result = await db.execute(
         select(Classroom).where(
-            Classroom.id == classroom_id
+            Classroom.id == classroom_id,
+            Classroom.organization_id == current_user.organization_id,
         )
     )
 
