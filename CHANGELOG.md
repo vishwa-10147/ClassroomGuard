@@ -4,6 +4,53 @@ All notable changes to ClassroomGuard are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-10-19
+
+### Security
+
+- Incidents were not scoped to an organisation: staff of one organisation could list, read,
+  change and delete another's. Every incident route now checks the organisation, as do
+  recordings and uploaded video files.
+- Incident notes are added with `POST /api/v1/incidents/{id}/notes`; the author and time come
+  from the session. `PATCH` can no longer replace the notes.
+
+### Added
+
+- **Recording analysis:** `POST /api/v1/recordings` uploads footage for a camera and queues it.
+  The new `ai-recordings` worker (`ai/recording_worker.py`, in both Compose files) analyses it
+  with the live pipeline, timed by the video. Detections become events linked to the recording
+  with their time in the video; they raise no live alert. Progress is shown live, and staff can
+  cancel, re-run, download and delete recordings.
+- **Seat and ignore zones** per camera, drawn on the Cameras page. Detections in a seat zone carry
+  the seat; ignore zones (invigilator desk, aisles) are never flagged.
+- **Incidents:** create from scratch or escalate an alert (`alertId` attaches its room, camera and
+  detection); notes, reassignment (`GET /api/v1/incidents/assignees`), escalation, dismiss,
+  reopen; search and filters. The evidence panel shows the attached detections.
+- **Events:** search (`q`), `source=live|recording` and `recording_id` filters.
+- `recordings:write` permission (admin, security) for uploading and running analysis. System
+  roles are synced with the code on startup.
+- `WEBHOOK_ALLOWED_NETWORKS` lets webhooks reach a receiver on the campus LAN.
+- Mobile: `EAS_PROJECT_ID` sets the Expo project for push notifications at build time
+  (`mobile/app.config.js`).
+
+### Fixed
+
+- Buttons that did nothing: Create Incident, incident Add Note / Resolve / Reassign / Escalate,
+  incident and event search and filters, alert Investigate, recording Upload / Download / Delete,
+  the camera settings icon on Live Monitoring and "View all" in notifications.
+- The AI de-duplication windows treated "never alerted" as time 0, which would have suppressed
+  every alert in the first minutes of a recording.
+- The incident page showed a placeholder evidence image ("Seat D4") instead of real evidence.
+- The Alerts tab count only counted the alerts on the current tab.
+- `text-cg-text-muted`, used across the web app, was not defined.
+- Incidents, Events, Alerts and the incident page now use the app's theme colours.
+- Dashboard "today" figures count live-camera detections only.
+
+### Migration
+
+- `b7c1d2e3f4a5`: `detection_events.recording_id` and `cameras.zones`. Applied automatically
+  when the API container starts (`python -m backend.scripts.migrate` outside Docker).
+
 ## [1.0.1] - 2026-10-19
 
 ### Added

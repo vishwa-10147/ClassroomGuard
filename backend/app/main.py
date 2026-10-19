@@ -45,7 +45,7 @@ _is_production = settings.app_env == "production"
 app = FastAPI(
     title="ClassroomGuard API",
     description="AI-powered classroom monitoring and security platform",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
     # Interactive API docs are for development only
     docs_url=None if _is_production else "/docs",
@@ -136,7 +136,7 @@ app.mount("/metrics", metrics_app)
 async def root():
     return {
         "name": "ClassroomGuard API",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "status": "online",
     }
 

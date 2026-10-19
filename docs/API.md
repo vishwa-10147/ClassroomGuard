@@ -71,8 +71,8 @@ Each route requires a named permission. Roles map to permissions in
 | Role | Permissions |
 |---|---|
 | `super_admin` | All permissions |
-| `admin` | Users (read, write), organisations (read, manage), cameras and classrooms (read, write), alerts (read, write, manage), incidents (read, write), recordings (read, delete), events, reports (read, write), search, settings (read), audit log (read), webhooks (view, manage) |
-| `security` | Cameras, classrooms, alerts (read, write, manage), incidents (read, write), recordings, events, reports, search (read), webhooks (view) |
+| `admin` | Users (read, write), organisations (read, manage), cameras and classrooms (read, write), alerts (read, write, manage), incidents (read, write), recordings (read, write, delete), events, reports (read, write), search, settings (read), audit log (read), webhooks (view, manage) |
+| `security` | Cameras, classrooms, alerts (read, write, manage), incidents (read, write), recordings (read, write), events, reports, search (read), webhooks (view) |
 | `faculty` | Cameras, classrooms, alerts (read, manage), incidents, recordings, events, reports, search (read), webhooks (view) |
 | `viewer` | Cameras, classrooms, alerts, incidents, events, reports, search (read), webhooks (view) |
 
@@ -98,11 +98,29 @@ Content-Type: application/json
 }
 ```
 
-This is the shape the AI engine sends (`ai/src/alert_system.py`). `classroomId`, `seatId` and
-`boundingBox` are optional. `cameraId` is the camera's ID or its Camera ID code. The classroom is taken from the camera when
+This is the shape the AI engine sends (`ai/src/alert_system.py`). `classroomId`, `seatId`,
+`boundingBox` (`{"x", "y", "w", "h"}` in pixels) and `recordingId` are optional. `seatId` is
+filled in when the detection falls in a seat zone drawn on the camera. `cameraId` is the camera's ID or its Camera ID code. The classroom is taken from the camera when
 `classroomId` is omitted. The API stores the event and broadcasts a `detection` message. For
 severities `critical`, `high` and `medium` it also creates an alert, broadcasts an `alert`
 message, sends push notifications and triggers `alert.created` webhooks.
+
+Events with a `recordingId` come from analysing an uploaded recording: they are stored, linked to
+the recording and counted on it, but raise no alert and no live `detection` message, because
+nothing is happening in the room now. `metadata.video_time_s` gives the position in the video.
+
+### Recording analysis jobs
+
+`recording_worker.py` processes uploaded recordings through these service-token endpoints:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/recordings/claim` | Hands out the oldest queued recording and marks it `processing`: `{id, name, filename, cameraId, cameraCode, zones}`. `204` when nothing is queued |
+| GET | `/api/v1/recordings/{id}/source` | The video file, for workers that do not share the storage folder |
+| POST | `/api/v1/recordings/{id}/progress` | `{currentFrame, totalFrames, duration, phase, detectionCount}`. Answers `{"cancelled": true}` once staff cancel the job |
+| POST | `/api/v1/recordings/{id}/complete` | `{state: "completed" \| "failed", detectionCount, errorMessage}` |
+
+Progress is broadcast to the web app as `recording` WebSocket messages.
 
 ### Heartbeat
 
@@ -126,7 +144,8 @@ when the token is invalid, the user is inactive, or the `Origin` header is not i
 | Direction | Message |
 |---|---|
 | Server → client | `{"type": "alert", "payload": {...}}` when an alert is created |
-| Server → client | `{"type": "detection", "payload": {...}}` for every detection event |
+| Server → client | `{"type": "detection", "payload": {...}}` for every detection event from a live camera |
+| Server → client | `{"type": "recording", "payload": {"id", "status", "progress", "phase", "detectionCount", "eventCount"}}` while an uploaded recording is analysed |
 | Client → server | `{"type": "ping", "timestamp": <n>}`, answered with `{"type": "pong", ...}` |
 | Client → server | `{"type": "subscribe", "channel": "alerts"}`, answered with `{"type": "subscribed", ...}` |
 
@@ -208,15 +227,23 @@ is the permission the caller needs.
 | Method | Path | Access |
 |---|---|---|
 | GET | `/api/v1/cameras` | `cameras:read` |
-| GET | `/api/v1/cameras/{camera_id}` | `cameras:read` or AI service token |
+| GET | `/api/v1/cameras/{camera_id}` | `cameras:read` or AI service token (which may also use the Camera ID code) |
 | POST | `/api/v1/cameras` | `cameras:write` |
-| PATCH | `/api/v1/cameras/{camera_id}` | `cameras:write` |
+| PATCH | `/api/v1/cameras/{camera_id}` | `cameras:write`. Accepts `zones` (see below) |
 | POST | `/api/v1/cameras/{camera_id}/test` | `cameras:write` |
 | GET | `/api/v1/cameras/{camera_id}/stream` | `cameras:read` |
 | GET | `/api/v1/cameras/{camera_id}/snapshot` | `cameras:read` |
 | DELETE | `/api/v1/cameras/{camera_id}` | `cameras:delete` |
 
+Camera `zones` are rectangles on the camera view in 0-1 fractions of the image:
+`{"id", "type": "seat" | "ignore", "label", "x", "y", "w", "h"}`. Seat labels must be unique on a
+camera. Detections in a seat zone carry its label as `seatId`; people and objects in an ignore zone
+(the invigilator's desk, an aisle) are never flagged.
+
 ### Detection events
+
+`GET /api/v1/events` filters: `classroom_id`, `camera_id`, `type`, `severity`, `since`,
+`recording_id`, `source=live|recording`, and `q` (searches type, seat, camera and room).
 
 | Method | Path | Access |
 |---|---|---|
@@ -262,11 +289,15 @@ created since 00:00 UTC.
 
 | Method | Path | Access |
 |---|---|---|
-| GET | `/api/v1/incidents` | `incidents:read` |
+| GET | `/api/v1/incidents` | `incidents:read`. Filters: `status`, `severity`, `classroom_id`, `q` |
+| GET | `/api/v1/incidents/assignees` | `incidents:write`. Staff an incident can be assigned to |
 | GET | `/api/v1/incidents/{incident_id}` | `incidents:read` |
-| POST | `/api/v1/incidents` | `incidents:write` |
-| PATCH | `/api/v1/incidents/{incident_id}` | `incidents:write` |
+| POST | `/api/v1/incidents` | `incidents:write`. With `alertId`, the alert's room, camera and detection are attached |
+| PATCH | `/api/v1/incidents/{incident_id}` | `incidents:write`. `title`, `description`, `severity`, `status`, `assignedTo` |
+| POST | `/api/v1/incidents/{incident_id}/notes` | `incidents:write`. `{"text"}`; author and time come from the session |
 | DELETE | `/api/v1/incidents/{incident_id}` | `incidents:write` |
+
+Incidents, recordings and their files are only visible to the organisation they belong to.
 
 ### Evidence
 
@@ -281,18 +312,20 @@ created since 00:00 UTC.
 | Method | Path | Access |
 |---|---|---|
 | GET | `/api/v1/recordings` | `recordings:read` |
+| POST | `/api/v1/recordings` | `recordings:write`. Multipart: `file` (MP4, AVI, MOV, MKV, up to 500 MB), `cameraId`, optional `name`, `analyze` (default true) |
 | GET | `/api/v1/recordings/{recording_id}` | `recordings:read` |
-| POST | `/api/v1/recordings/{recording_id}/process` | `recordings:read` |
-| POST | `/api/v1/recordings/{recording_id}/cancel` | `recordings:read` |
-| DELETE | `/api/v1/recordings/{recording_id}` | `recordings:delete` |
+| GET | `/api/v1/recordings/{recording_id}/file` | `recordings:read`. Plays with Range requests; `?download=true` downloads; accepts `?token=` |
+| POST | `/api/v1/recordings/{recording_id}/process` | `recordings:write`. Queues (or re-queues) analysis |
+| POST | `/api/v1/recordings/{recording_id}/cancel` | `recordings:write` |
+| DELETE | `/api/v1/recordings/{recording_id}` | `recordings:delete`. Also deletes the file and its detections |
 
 ### Uploads
 
 | Method | Path | Access |
 |---|---|---|
-| POST | `/api/v1/uploads/video` | `recordings:read` |
-| GET | `/api/v1/uploads/video/{filename}` | `recordings:read` |
-| GET | `/api/v1/uploads/{filename}` | `recordings:read` |
+| POST | `/api/v1/uploads/video` | `recordings:write`. Stores a file without creating a recording; the web app uses `POST /api/v1/recordings` |
+| GET | `/api/v1/uploads/video/{filename}` | `recordings:read`, own organisation's recordings only |
+| GET | `/api/v1/uploads/{filename}` | `recordings:read`, own organisation's recordings only |
 
 ### Reports
 
