@@ -174,7 +174,11 @@ export function ZoneEditor({ camera, onClose, onSaved }: Props) {
             </label>
           </div>
 
-          <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-cg-border-default bg-cg-bg-video select-none">
+          {/* Height-capped so the whole editor fits on a laptop screen without scrolling */}
+          <div
+            className="relative mx-auto aspect-video w-full overflow-hidden rounded-lg border border-cg-border-default bg-cg-bg-video select-none"
+            style={{ maxWidth: 'calc((85vh - 260px) * 16 / 9)' }}
+          >
             {/* The picture is stretched to the box so zone fractions match the camera image exactly */}
             {localImage ? (
               <img src={localImage} alt="" className="absolute inset-0 h-full w-full object-fill" />

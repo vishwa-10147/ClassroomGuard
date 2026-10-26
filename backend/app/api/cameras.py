@@ -232,7 +232,8 @@ async def update_camera(
         db, current_user, "update", "camera",
         resource_id=camera_id,
         old_value=old_data,
-        new_value=updates,
+        # A hall's zones run to several kilobytes; the audit log keeps how many there are
+        new_value={**updates, "zones": len(updates["zones"] or [])} if "zones" in updates else updates,
         request=request,
     )
     await db.commit()

@@ -104,3 +104,6 @@ backups/
 
 # Local development overrides (see SETUP.md)
 docker-compose.override.yml
+
+# Demo video build output (demo/run.sh)
+demo/output/

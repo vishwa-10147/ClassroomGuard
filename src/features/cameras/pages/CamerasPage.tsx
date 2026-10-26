@@ -220,6 +220,8 @@ export default function CamerasPage() {
                 : 'text-cg-text-muted hover:text-cg-text-primary'
             )}
             onClick={() => setViewMode('table')}
+            aria-label="Table view"
+            aria-pressed={viewMode === 'table'}
           >
             <List className="w-4 h-4" />
           </button>
@@ -232,6 +234,8 @@ export default function CamerasPage() {
                 : 'text-cg-text-muted hover:text-cg-text-primary'
             )}
             onClick={() => setViewMode('grid')}
+            aria-label="Grid view"
+            aria-pressed={viewMode === 'grid'}
           >
             <LayoutGrid className="w-4 h-4" />
           </button>
@@ -331,6 +335,7 @@ export default function CamerasPage() {
                             anchor={
                               <button
                                 onClick={() => setActiveDropdown(activeDropdown === camera.id ? null : camera.id)}
+                                aria-label={`Actions for ${camera.name}`}
                                 className="p-1.5 text-cg-text-muted hover:text-cg-text-primary hover:bg-cg-bg-surface rounded-md transition-colors"
                               >
                                 <MoreVertical className="w-4 h-4" />

@@ -169,3 +169,19 @@ async def test_duplicate_seat_labels_rejected(client: AsyncClient):
         json={"zones": [{**seat, "id": "a"}, {**seat, "id": "b", "label": "b2"}]},
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_full_hall_of_seat_zones_can_be_saved(client: AsyncClient):
+    # 60 seats are far more than the audit log's value field holds as JSON
+    data = await login(client, "admin@classguard.dev", "Admin@12345")
+    zones = [
+        {"id": f"s{r}{c}", "type": "seat", "label": f"{r}{c}", "x": c * 0.09, "y": "ABCDEF".index(r) * 0.15,
+         "w": 0.08, "h": 0.14}
+        for r in "ABCDEF" for c in range(10)
+    ]
+    resp = await client.patch(
+        "/api/v1/cameras/cam-002", headers=auth_header(data["access_token"]), json={"zones": zones}
+    )
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["zones"]) == 60
